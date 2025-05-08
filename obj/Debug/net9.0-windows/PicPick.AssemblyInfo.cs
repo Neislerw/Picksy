@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PicPick")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+921d866abb0bf833e5690f9a1cea9cdb5797b27e")]
 [assembly: System.Reflection.AssemblyProductAttribute("PicPick")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PicPick")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

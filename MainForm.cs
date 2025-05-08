@@ -21,6 +21,14 @@ namespace PicPick
         {
             InitializeComponent();
             history = new Stack<(string? Loser, bool KeptBoth)>();
+            try
+            {
+                this.Icon = new Icon("Resources\\logo.ico");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading icon: {ex.Message}", "PicPick Error");
+            }
         }
 
         private void SelectFolderButton_Click(object sender, EventArgs e)
@@ -295,11 +303,6 @@ namespace PicPick
         {
             if (losers == null || currentFolderPath == null) return;
 
-            if (MessageBox.Show($"Move {losers.Count} losing photos to '_delete' folder?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-            {
-                return;
-            }
-
             try
             {
                 // Dispose thumbnails to release file handles
@@ -324,7 +327,6 @@ namespace PicPick
                     File.Move(loser, destPath);
                 }
 
-                MessageBox.Show("Losing photos moved to '_delete' folder.", "PicPick");
                 MoveToNextBatch();
             }
             catch (Exception ex)
@@ -337,7 +339,6 @@ namespace PicPick
         {
             // Dispose thumbnails to release file handles
             ClearThumbnails();
-            MessageBox.Show("Cancelled. Keeping all photos.", "PicPick");
             MoveToNextBatch();
         }
 
@@ -366,6 +367,10 @@ namespace PicPick
                 currentBatchIndex++;
                 StartTournament(batches[currentBatchIndex]);
             }
+            else
+            {
+                MessageBox.Show("All batches completed.", "PicPick");
+            }
         }
 
         private void ResetUI()
@@ -380,8 +385,7 @@ namespace PicPick
             remainingPhotos = null;
             losers = null;
             history.Clear();
-            currentFolderPath = null;
-            batches = null;
+            // Preserve batches and currentFolderPath for next batch
             ClearThumbnails();
         }
     }

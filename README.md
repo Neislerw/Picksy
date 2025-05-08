@@ -1,5 +1,7 @@
 # PicPick
 
+![PicPick Logo](Resources/logo.png)
+
 PicPick is an open-source Windows application that helps you organize photos by grouping them into batches based on timestamped filenames and selecting favorites through a tournament-style comparison. Non-selected photos can be moved to a "_delete" folder or kept.
 
 ## Features
