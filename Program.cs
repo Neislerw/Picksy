@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace PicPick
+namespace Picksy
 {
     static class Program
     {

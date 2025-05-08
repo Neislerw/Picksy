@@ -1,4 +1,4 @@
-﻿namespace PicPick;
+﻿namespace Picksy;
 
 partial class MainForm
 {
@@ -133,7 +133,7 @@ partial class MainForm
         this.Controls.Add(this.pictureBoxRight);
         this.Controls.Add(this.pictureBoxLeft);
         this.Controls.Add(this.selectFolderButton);
-        this.Text = "PicPick";
+        this.Text = "Picksy";
         ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).EndInit();
         ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).EndInit();
         this.thumbnailPanel.ResumeLayout(false);

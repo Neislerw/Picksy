@@ -203,11 +203,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Will\\Documents\\Coding\\PicPick\\PicPick.csproj",
-      "projectName": "PicPick",
-      "projectPath": "C:\\Users\\Will\\Documents\\Coding\\PicPick\\PicPick.csproj",
+      "projectUniqueName": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\Picksy.csproj",
+      "projectName": "Picksy",
+      "projectPath": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\Picksy.csproj",
       "packagesPath": "C:\\Users\\Will\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Will\\Documents\\Coding\\PicPick\\obj\\",
+      "outputPath": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\Will\\AppData\\Roaming\\NuGet\\NuGet.Config"

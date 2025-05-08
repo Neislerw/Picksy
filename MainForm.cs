@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
 
-namespace PicPick
+namespace Picksy
 {
     public partial class MainForm : Form
     {
@@ -27,7 +27,7 @@ namespace PicPick
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading icon: {ex.Message}", "PicPick Error");
+                MessageBox.Show($"Error loading icon: {ex.Message}", "Picksy Error");
             }
         }
 
@@ -49,12 +49,12 @@ namespace PicPick
                         }
                         else
                         {
-                            MessageBox.Show("No valid batches found with at least 4 photos.", "PicPick");
+                            MessageBox.Show("No valid batches found with at least 4 photos.", "Picksy");
                         }
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Error scanning folder: {ex.Message}", "PicPick Error");
+                        MessageBox.Show($"Error scanning folder: {ex.Message}", "Picksy Error");
                     }
                 }
             }
@@ -64,7 +64,7 @@ namespace PicPick
         {
             if (batch == null || batch.Count < 4)
             {
-                MessageBox.Show("Invalid batch. At least 4 photos required.", "PicPick");
+                MessageBox.Show("Invalid batch. At least 4 photos required.", "Picksy");
                 ResetUI();
                 return;
             }
@@ -89,13 +89,13 @@ namespace PicPick
         {
             if (remainingPhotos == null || remainingPhotos.Count == 0)
             {
-                MessageBox.Show("Tournament ended. No photos left.", "PicPick");
+                MessageBox.Show("Tournament ended. No photos left.", "Picksy");
                 ShowResults();
                 return;
             }
             if (remainingPhotos.Count == 1)
             {
-                MessageBox.Show($"Tournament ended. Winner: {Path.GetFileName(remainingPhotos[0])}", "PicPick");
+                MessageBox.Show($"Tournament ended. Winner: {Path.GetFileName(remainingPhotos[0])}", "Picksy");
                 ShowResults();
                 return;
             }
@@ -118,7 +118,7 @@ namespace PicPick
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading images: {ex.Message}. Skipping this pair.", "PicPick Error");
+                MessageBox.Show($"Error loading images: {ex.Message}. Skipping this pair.", "Picksy Error");
                 remainingPhotos.RemoveAt(currentPairIndex + 1);
                 remainingPhotos.RemoveAt(currentPairIndex);
                 UpdateTournamentUI();
@@ -222,7 +222,7 @@ namespace PicPick
             if (remainingPhotos == null) return;
 
             // End tournament, keep all remaining photos
-            MessageBox.Show($"Tournament ended. Keeping {remainingPhotos.Count} remaining photos.", "PicPick");
+            MessageBox.Show($"Tournament ended. Keeping {remainingPhotos.Count} remaining photos.", "Picksy");
             ShowResults();
         }
 
@@ -230,7 +230,7 @@ namespace PicPick
         {
             if (remainingPhotos == null || history.Count == 0)
             {
-                MessageBox.Show("No actions to undo.", "PicPick");
+                MessageBox.Show("No actions to undo.", "Picksy");
                 return;
             }
 
@@ -261,7 +261,7 @@ namespace PicPick
         {
             if (losers == null || losers.Count == 0)
             {
-                MessageBox.Show("No losing photos to display.", "PicPick");
+                MessageBox.Show("No losing photos to display.", "Picksy");
                 MoveToNextBatch();
                 return;
             }
@@ -290,7 +290,7 @@ namespace PicPick
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error loading thumbnail for {Path.GetFileName(loser)}: {ex.Message}", "PicPick Error");
+                    MessageBox.Show($"Error loading thumbnail for {Path.GetFileName(loser)}: {ex.Message}", "Picksy Error");
                 }
             }
 
@@ -331,7 +331,7 @@ namespace PicPick
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error moving files: {ex.Message}", "PicPick Error");
+                MessageBox.Show($"Error moving files: {ex.Message}", "Picksy Error");
             }
         }
 
@@ -369,7 +369,7 @@ namespace PicPick
             }
             else
             {
-                MessageBox.Show("All batches completed.", "PicPick");
+                MessageBox.Show("All batches completed.", "Picksy");
             }
         }
 

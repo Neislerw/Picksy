@@ -1,8 +1,8 @@
-# PicPick
+# Picksy
 
-![PicPick Logo](Resources/logo.png)
+![Picksy Logo](Resources/logo.png)
 
-PicPick is an open-source Windows application that helps you organize photos by grouping them into batches based on timestamped filenames and selecting favorites through a tournament-style comparison. Non-selected photos can be moved to a "_delete" folder or kept.
+Picksy is an open-source Windows application that helps you organize photos by grouping them into batches based on timestamped filenames and selecting favorites through a tournament-style comparison. Non-selected photos can be moved to a "_delete" folder or kept.
 
 ## Features
 - **Photo Grouping**: Groups images with filenames like `YYYYMMDD_HHMMSS_XXX.jpg` (e.g., `20250122_171223_003.jpg`) taken within 20 seconds of each other (minimum 4 photos per batch).
@@ -25,5 +25,5 @@ PicPick is an open-source Windows application that helps you organize photos by 
 ## Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/<your-username>/PicPick.git
-   cd PicPick
+   git clone https://github.com/<your-username>/Picksy.git
+   cd Picksy
