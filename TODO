@@ -7,5 +7,6 @@
     - Show Preview of 'batches' by showing a stack of images with a thumbnail, before starting processing
     - ~~ Add Ability to Rotate batches of photos
 - ~~ Checkbox for "Include Subfolders"
-- Additional batch selection methods(by date created, manual thumbnail selection, by filename)
+- ~~ Additional batch selection methods(by date created, manual thumbnail selection, by filename)
 - Make Portable, (ie can be run from a flashdrive)
+- Allow access to phone folders via MTP
