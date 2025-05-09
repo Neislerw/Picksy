@@ -180,12 +180,9 @@ namespace Picksy
             }
             finally
             {
-                // Dispose original images after thumbnail creation or full-resolution use
-                if (!showFullResolution)
-                {
-                    leftImage?.Dispose();
-                    rightImage?.Dispose();
-                }
+                // Dispose original images after use
+                leftImage?.Dispose();
+                rightImage?.Dispose();
             }
             remainingLabel.Text = $"Photos remaining: {remainingPhotos.Count}";
             UpdatePictureBoxSizes();
@@ -590,7 +587,30 @@ namespace Picksy
             }
             else
             {
-                MessageBox.Show("All batches completed.", "Picksy");
+                // Calculate size of _delete folder
+                double deleteFolderSizeMB = 0;
+                if (currentFolderPath != null)
+                {
+                    string deleteFolder = Path.Combine(currentFolderPath, "_delete");
+                    if (Directory.Exists(deleteFolder))
+                    {
+                        long totalBytes = 0;
+                        foreach (var file in Directory.GetFiles(deleteFolder, "*", SearchOption.AllDirectories))
+                        {
+                            totalBytes += new FileInfo(file).Length;
+                        }
+                        deleteFolderSizeMB = totalBytes / (1024.0 * 1024.0); // Convert bytes to MB
+                    }
+                }
+                if (deleteFolderSizeMB > 1024)
+                {
+                    double deleteFolderSizeGB = deleteFolderSizeMB / 1024.0;
+                    MessageBox.Show($"All batches completed. {deleteFolderSizeGB:F1} GB Saved!", "Picksy");
+                }
+                else
+                {
+                    MessageBox.Show($"All batches completed. {deleteFolderSizeMB:F2} MB Saved!", "Picksy");
+                }
             }
         }
 
