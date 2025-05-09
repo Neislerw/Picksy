@@ -91,7 +91,7 @@ partial class MainForm
         this.instructionLabel.Name = "instructionLabel";
         this.instructionLabel.Size = new System.Drawing.Size(760, 60);
         this.instructionLabel.TabIndex = 4;
-        this.instructionLabel.Text = "Click or use Left/Right arrow to select a photo, Up to keep both, Down to undo, Q/E to rotate, W to toggle full resolution, Space to keep all remaining.";
+        this.instructionLabel.Text = "Click or use Left/Right to select a photo, Up to keep both, Down to undo, Q/E to rotate, W to toggle full resolution, Del to delete batch, Space to keep all.";
         this.instructionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
         // 
         // thumbnailPanel

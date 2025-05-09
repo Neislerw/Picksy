@@ -19,6 +19,7 @@ namespace Picksy
         private Stack<(string? Loser, bool KeptBoth)> history;
         private int batchSizeMinimum = 4; // Default
         private int batchTimingMaximum = 20; // Default in seconds
+        private bool includeSubfolders = false; // Default
         private Dictionary<string, int> photoRotations; // Track rotation angle (degrees) per photo
         private bool showFullResolution = false; // Track full-resolution toggle
 
@@ -58,7 +59,7 @@ namespace Picksy
                     try
                     {
                         currentFolderPath = dialog.SelectedPath;
-                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum);
+                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders);
                         batches = grouper.GroupPhotos(dialog.SelectedPath);
                         currentBatchIndex = 0;
                         if (batches.Count > 0)
@@ -80,12 +81,13 @@ namespace Picksy
 
         private void SettingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            using (var settingsForm = new SettingsForm(batchSizeMinimum, batchTimingMaximum))
+            using (var settingsForm = new SettingsForm(batchSizeMinimum, batchTimingMaximum, includeSubfolders))
             {
                 if (settingsForm.ShowDialog() == DialogResult.OK)
                 {
                     batchSizeMinimum = settingsForm.GetBatchSizeMinimum();
                     batchTimingMaximum = settingsForm.GetBatchTimingMaximum();
+                    includeSubfolders = settingsForm.GetIncludeSubfolders();
                 }
             }
         }
@@ -385,6 +387,16 @@ namespace Picksy
                     UpdateTournamentUI();
                     return true;
                 }
+                else if (keyData == Keys.Delete)
+                {
+                    if (currentBatch == null) return true;
+                    var result = MessageBox.Show("Delete all photos in this batch?", "Confirm Batch Deletion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (result == DialogResult.Yes)
+                    {
+                        DeleteCurrentBatch();
+                    }
+                    return true;
+                }
             }
             else if (thumbnailPanel.Visible && losers != null)
             {
@@ -514,6 +526,49 @@ namespace Picksy
 
             thumbnailPanel.Visible = true;
             deletePromptLabel.Visible = true;
+        }
+
+        private void DeleteCurrentBatch()
+        {
+            if (currentBatch == null || currentFolderPath == null) return;
+
+            try
+            {
+                // Dispose current images to release file handles
+                pictureBoxLeft.Image?.Dispose();
+                pictureBoxRight.Image?.Dispose();
+                pictureBoxLeft.Image = null;
+                pictureBoxRight.Image = null;
+
+                string deleteFolder = Path.Combine(currentFolderPath, "_delete");
+                Directory.CreateDirectory(deleteFolder);
+
+                foreach (var photo in currentBatch)
+                {
+                    string fileName = Path.GetFileName(photo);
+                    string destPath = Path.Combine(deleteFolder, fileName);
+                    // Handle duplicate filenames
+                    int counter = 1;
+                    while (File.Exists(destPath))
+                    {
+                        string baseName = Path.GetFileNameWithoutExtension(fileName);
+                        string extension = Path.GetExtension(fileName);
+                        destPath = Path.Combine(deleteFolder, $"{baseName}_{counter}{extension}");
+                        counter++;
+                    }
+                    File.Move(photo, destPath);
+                }
+
+                // Clear current batch and advance
+                currentBatch = null;
+                remainingPhotos = null;
+                losers = null;
+                MoveToNextBatch();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error moving files: {ex.Message}", "Picksy Error");
+            }
         }
 
         private void MoveToDeleteFolder()
