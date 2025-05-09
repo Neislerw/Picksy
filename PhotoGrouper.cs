@@ -6,8 +6,14 @@ namespace Picksy
 {
     public class PhotoGrouper
     {
-        private const int TimeThresholdSeconds = 20; // Max seconds between photos in a batch
-        private const int MinBatchSize = 4; // Minimum photos per batch
+        private readonly int TimeThresholdSeconds; // Max seconds between photos in a batch
+        private readonly int MinBatchSize; // Minimum photos per batch
+
+        public PhotoGrouper(int minBatchSize, int timeThresholdSeconds)
+        {
+            MinBatchSize = minBatchSize;
+            TimeThresholdSeconds = timeThresholdSeconds;
+        }
 
         public List<List<string>> GroupPhotos(string folderPath)
         {
@@ -45,8 +51,16 @@ namespace Picksy
             // Sort photos by timestamp
             photos.Sort((a, b) =>
             {
-                if (!a.Timestamp.HasValue || !b.Timestamp.HasValue) return 0;
-                return a.Timestamp.Value.CompareTo(b.Timestamp.Value);
+                // Handle null cases explicitly
+                if (a.Timestamp is not DateTime aTime)
+                {
+                    return b.Timestamp is not DateTime _ ? 0 : -1;
+                }
+                if (b.Timestamp is not DateTime bTime)
+                {
+                    return 1;
+                }
+                return aTime.CompareTo(bTime);
             });
 
             // Group photos
@@ -57,7 +71,7 @@ namespace Picksy
 
                 currentBatch.Add(photos[i].Path);
 
-                // Check if next photo is within 20 seconds
+                // Check if next photo is within time threshold
                 if (i < photos.Count - 1 && photos[i + 1].Timestamp.HasValue)
                 {
                     var timeDiff = (photos[i + 1].Timestamp.Value - photos[i].Timestamp.Value).TotalSeconds;

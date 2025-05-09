@@ -16,6 +16,8 @@ namespace Picksy
         private string? currentFolderPath;
         private int currentBatchIndex;
         private Stack<(string? Loser, bool KeptBoth)> history;
+        private int batchSizeMinimum = 4; // Default
+        private int batchTimingMaximum = 20; // Default in seconds
 
         public MainForm()
         {
@@ -40,7 +42,7 @@ namespace Picksy
                     try
                     {
                         currentFolderPath = dialog.SelectedPath;
-                        var grouper = new PhotoGrouper();
+                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum);
                         batches = grouper.GroupPhotos(dialog.SelectedPath);
                         currentBatchIndex = 0;
                         if (batches.Count > 0)
@@ -49,7 +51,7 @@ namespace Picksy
                         }
                         else
                         {
-                            MessageBox.Show("No valid batches found with at least 4 photos.", "Picksy");
+                            MessageBox.Show("No valid batches found with at least " + batchSizeMinimum + " photos.", "Picksy");
                         }
                     }
                     catch (Exception ex)
@@ -60,11 +62,23 @@ namespace Picksy
             }
         }
 
+        private void SettingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (var settingsForm = new SettingsForm(batchSizeMinimum, batchTimingMaximum))
+            {
+                if (settingsForm.ShowDialog() == DialogResult.OK)
+                {
+                    batchSizeMinimum = settingsForm.GetBatchSizeMinimum();
+                    batchTimingMaximum = settingsForm.GetBatchTimingMaximum();
+                }
+            }
+        }
+
         private void StartTournament(List<string> batch)
         {
-            if (batch == null || batch.Count < 4)
+            if (batch == null || batch.Count < batchSizeMinimum)
             {
-                MessageBox.Show("Invalid batch. At least 4 photos required.", "Picksy");
+                MessageBox.Show("Invalid batch. At least " + batchSizeMinimum + " photos required.", "Picksy");
                 ResetUI();
                 return;
             }
@@ -282,7 +296,7 @@ namespace Picksy
                 {
                     var pictureBox = new PictureBox
                     {
-                        Size = new Size(100, 100),
+                        Size = new System.Drawing.Size(100, 100),
                         SizeMode = PictureBoxSizeMode.Zoom,
                         Image = Image.FromFile(loser)
                     };

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Picksy")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9350b18383820ca162e9239ecdbd290dc8d1501f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e8251a8e84096150f9d7539ae7dff17299f7f91e")]
 [assembly: System.Reflection.AssemblyProductAttribute("Picksy")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Picksy")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
