@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
+using System.Drawing.Drawing2D;
 
 namespace Picksy
 {
@@ -18,11 +19,25 @@ namespace Picksy
         private Stack<(string? Loser, bool KeptBoth)> history;
         private int batchSizeMinimum = 4; // Default
         private int batchTimingMaximum = 20; // Default in seconds
+        private Dictionary<string, int> photoRotations; // Track rotation angle (degrees) per photo
+        private bool showFullResolution = false; // Track full-resolution toggle
 
         public MainForm()
         {
             InitializeComponent();
             history = new Stack<(string? Loser, bool KeptBoth)>();
+            photoRotations = new Dictionary<string, int>();
+            // Ensure initial UI state is clean
+            pictureBoxLeft.Visible = false;
+            pictureBoxRight.Visible = false;
+            rotateClockwiseButton.Visible = false;
+            rotateCounterclockwiseButton.Visible = false;
+            thumbnailPanel.Visible = false;
+            deletePromptLabel.Visible = false;
+            remainingLabel.Visible = false;
+            instructionLabel.Visible = false;
+            selectFolderButton.Visible = true;
+            selectFolderButton.BringToFront(); // Ensure button is on top
             try
             {
                 this.Icon = new Icon("Resources\\logo.ico");
@@ -31,6 +46,7 @@ namespace Picksy
             {
                 MessageBox.Show($"Error loading icon: {ex.Message}", "Picksy Error");
             }
+            UpdateSelectFolderButtonPosition();
         }
 
         private void SelectFolderButton_Click(object sender, EventArgs e)
@@ -87,13 +103,20 @@ namespace Picksy
             remainingPhotos = new List<string>(batch);
             losers = new List<string>();
             history.Clear();
+            photoRotations.Clear();
+            foreach (var photo in batch)
+            {
+                photoRotations[photo] = 0; // Initialize rotation to 0 degrees
+            }
             currentPairIndex = 0;
+            showFullResolution = false;
             selectFolderButton.Visible = false;
             thumbnailPanel.Visible = false;
-            deleteButton.Visible = false;
-            cancelButton.Visible = false;
+            deletePromptLabel.Visible = false;
             pictureBoxLeft.Visible = true;
             pictureBoxRight.Visible = true;
+            rotateClockwiseButton.Visible = true;
+            rotateCounterclockwiseButton.Visible = true;
             remainingLabel.Visible = true;
             instructionLabel.Visible = true;
             UpdateTournamentUI();
@@ -120,25 +143,148 @@ namespace Picksy
                 currentPairIndex = 0;
             }
 
-            // Load two photos
+            // Load two photos with rotation
             pictureBoxLeft.Image?.Dispose();
             pictureBoxRight.Image?.Dispose();
             pictureBoxLeft.Image = null;
             pictureBoxRight.Image = null;
+            Image? leftImage = null;
+            Image? rightImage = null;
             try
             {
-                pictureBoxLeft.Image = Image.FromFile(remainingPhotos[currentPairIndex]);
-                pictureBoxRight.Image = Image.FromFile(remainingPhotos[currentPairIndex + 1]);
+                leftImage = Image.FromFile(remainingPhotos[currentPairIndex]);
+                rightImage = Image.FromFile(remainingPhotos[currentPairIndex + 1]);
+                int leftRotation = photoRotations[remainingPhotos[currentPairIndex]];
+                int rightRotation = photoRotations[remainingPhotos[currentPairIndex + 1]];
+                if (showFullResolution)
+                {
+                    pictureBoxLeft.Image = RotateImage(leftImage, leftRotation);
+                    pictureBoxRight.Image = RotateImage(rightImage, rightRotation);
+                }
+                else
+                {
+                    // Load thumbnails for performance
+                    pictureBoxLeft.Image = CreateThumbnail(leftImage, leftRotation);
+                    pictureBoxRight.Image = CreateThumbnail(rightImage, rightRotation);
+                }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading images: {ex.Message}. Skipping this pair.", "Picksy Error");
                 remainingPhotos.RemoveAt(currentPairIndex + 1);
                 remainingPhotos.RemoveAt(currentPairIndex);
+                leftImage?.Dispose();
+                rightImage?.Dispose();
                 UpdateTournamentUI();
                 return;
             }
+            finally
+            {
+                // Dispose original images after thumbnail creation or full-resolution use
+                if (!showFullResolution)
+                {
+                    leftImage?.Dispose();
+                    rightImage?.Dispose();
+                }
+            }
             remainingLabel.Text = $"Photos remaining: {remainingPhotos.Count}";
+            UpdatePictureBoxSizes();
+        }
+
+        private Image CreateThumbnail(Image image, int rotation)
+        {
+            // Create a thumbnail scaled to fit within 400x400, preserving aspect ratio
+            int maxSize = 400;
+            float ratio = Math.Min((float)maxSize / image.Width, (float)maxSize / image.Height);
+            int newWidth = (int)(image.Width * ratio);
+            int newHeight = (int)(image.Height * ratio);
+            var thumbnail = new Bitmap(newWidth, newHeight);
+            try
+            {
+                using (var g = Graphics.FromImage(thumbnail))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.Clear(Color.Transparent);
+                    g.DrawImage(image, 0, 0, newWidth, newHeight);
+                }
+                return RotateImage(thumbnail, rotation);
+            }
+            catch
+            {
+                thumbnail.Dispose();
+                throw;
+            }
+        }
+
+        private Image RotateImage(Image image, int angle)
+        {
+            if (angle == 0) return new Bitmap(image); // Return a copy to ensure disposal
+            // Calculate new size for rotated image
+            double radians = Math.Abs(angle * Math.PI / 180);
+            double sin = Math.Sin(radians);
+            double cos = Math.Cos(radians);
+            int newWidth = (int)(image.Width * cos + image.Height * sin);
+            int newHeight = (int)(image.Width * sin + image.Height * cos);
+            var rotated = new Bitmap(newWidth, newHeight);
+            try
+            {
+                using (var g = Graphics.FromImage(rotated))
+                {
+                    g.Clear(Color.Transparent);
+                    g.TranslateTransform(newWidth / 2f, newHeight / 2f);
+                    g.RotateTransform(angle);
+                    g.TranslateTransform(-image.Width / 2f, -image.Height / 2f);
+                    g.DrawImage(image, 0, 0);
+                }
+                return rotated;
+            }
+            catch
+            {
+                rotated.Dispose();
+                throw;
+            }
+        }
+
+        private void UpdatePictureBoxSizes()
+        {
+            // Calculate available space, accounting for menu strip, buttons, and labels
+            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - rotateClockwiseButton.Height - 30;
+            int availableWidth = (ClientSize.Width - 30) / 2; // Split for two images with padding
+
+            // Set PictureBox size to fit images without cropping
+            pictureBoxLeft.SizeMode = PictureBoxSizeMode.Zoom;
+            pictureBoxRight.SizeMode = PictureBoxSizeMode.Zoom;
+            pictureBoxLeft.Size = new Size(availableWidth, availableHeight);
+            pictureBoxRight.Size = new Size(availableWidth, availableHeight);
+            pictureBoxLeft.Location = new Point(10, menuStrip.Height + 10);
+            pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 10, menuStrip.Height + 10);
+            rotateClockwiseButton.Location = new Point(10, pictureBoxLeft.Bottom + 5);
+            rotateCounterclockwiseButton.Location = new Point(ClientSize.Width - rotateCounterclockwiseButton.Width - 10, pictureBoxLeft.Bottom + 5);
+            remainingLabel.Location = new Point(10, ClientSize.Height - instructionLabel.Height - remainingLabel.Height - 10);
+            instructionLabel.Location = new Point(10, ClientSize.Height - instructionLabel.Height - 5);
+            thumbnailPanel.Location = new Point(20, menuStrip.Height + 10);
+            deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 10);
+        }
+
+        private void UpdateSelectFolderButtonPosition()
+        {
+            // Center the select folder button
+            int x = (ClientSize.Width - selectFolderButton.Width) / 2;
+            int y = (ClientSize.Height - selectFolderButton.Height) / 2;
+            selectFolderButton.Location = new Point(x, y);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (remainingPhotos != null && pictureBoxLeft.Visible)
+            {
+                UpdatePictureBoxSizes();
+            }
+            else if (selectFolderButton.Visible)
+            {
+                UpdateSelectFolderButtonPosition();
+            }
         }
 
         private List<string> Shuffle(List<string> list)
@@ -167,9 +313,29 @@ namespace Picksy
             SelectPhoto(false);
         }
 
+        private void RotateClockwiseButton_Click(object sender, EventArgs e)
+        {
+            if (currentBatch == null) return;
+            foreach (var photo in currentBatch)
+            {
+                photoRotations[photo] = (photoRotations[photo] + 90) % 360;
+            }
+            UpdateTournamentUI();
+        }
+
+        private void RotateCounterclockwiseButton_Click(object sender, EventArgs e)
+        {
+            if (currentBatch == null) return;
+            foreach (var photo in currentBatch)
+            {
+                photoRotations[photo] = (photoRotations[photo] - 90 + 360) % 360;
+            }
+            UpdateTournamentUI();
+        }
+
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (currentBatch != null)
+            if (currentBatch != null && pictureBoxLeft.Visible)
             {
                 if (keyData == Keys.Left)
                 {
@@ -194,6 +360,45 @@ namespace Picksy
                 else if (keyData == Keys.Space)
                 {
                     EndTournament();
+                    return true;
+                }
+                else if (keyData == Keys.Q)
+                {
+                    if (currentBatch == null) return true;
+                    foreach (var photo in currentBatch)
+                    {
+                        photoRotations[photo] = (photoRotations[photo] - 90 + 360) % 360;
+                    }
+                    UpdateTournamentUI();
+                    return true;
+                }
+                else if (keyData == Keys.E)
+                {
+                    if (currentBatch == null) return true;
+                    foreach (var photo in currentBatch)
+                    {
+                        photoRotations[photo] = (photoRotations[photo] + 90) % 360;
+                    }
+                    UpdateTournamentUI();
+                    return true;
+                }
+                else if (keyData == Keys.W)
+                {
+                    showFullResolution = !showFullResolution;
+                    UpdateTournamentUI();
+                    return true;
+                }
+            }
+            else if (thumbnailPanel.Visible && losers != null)
+            {
+                if (keyData == Keys.Enter)
+                {
+                    MoveToDeleteFolder();
+                    return true;
+                }
+                else if (keyData == Keys.Escape)
+                {
+                    CancelBatch();
                     return true;
                 }
             }
@@ -285,6 +490,8 @@ namespace Picksy
             pictureBoxRight.Image?.Dispose();
             pictureBoxLeft.Visible = false;
             pictureBoxRight.Visible = false;
+            rotateClockwiseButton.Visible = false;
+            rotateCounterclockwiseButton.Visible = false;
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
 
@@ -296,7 +503,7 @@ namespace Picksy
                 {
                     var pictureBox = new PictureBox
                     {
-                        Size = new System.Drawing.Size(100, 100),
+                        Size = new Size(100, 100),
                         SizeMode = PictureBoxSizeMode.Zoom,
                         Image = Image.FromFile(loser)
                     };
@@ -309,11 +516,10 @@ namespace Picksy
             }
 
             thumbnailPanel.Visible = true;
-            deleteButton.Visible = true;
-            cancelButton.Visible = true;
+            deletePromptLabel.Visible = true;
         }
 
-        private void DeleteButton_Click(object sender, EventArgs e)
+        private void MoveToDeleteFolder()
         {
             if (losers == null || currentFolderPath == null) return;
 
@@ -349,7 +555,7 @@ namespace Picksy
             }
         }
 
-        private void CancelButton_Click(object sender, EventArgs e)
+        private void CancelBatch()
         {
             // Dispose thumbnails to release file handles
             ClearThumbnails();
@@ -367,13 +573,14 @@ namespace Picksy
                 }
             }
             thumbnailPanel.Controls.Clear();
+            // Reset visibility
+            deletePromptLabel.Visible = false;
         }
 
         private void MoveToNextBatch()
         {
             thumbnailPanel.Visible = false;
-            deleteButton.Visible = false;
-            cancelButton.Visible = false;
+            deletePromptLabel.Visible = false;
             ResetUI();
 
             if (batches != null && currentBatchIndex + 1 < batches.Count)
@@ -393,14 +600,24 @@ namespace Picksy
             pictureBoxRight.Image?.Dispose();
             pictureBoxLeft.Image = null;
             pictureBoxRight.Image = null;
+            pictureBoxLeft.Visible = false;
+            pictureBoxRight.Visible = false;
             remainingLabel.Text = "";
             selectFolderButton.Visible = true;
+            selectFolderButton.BringToFront();
+            rotateClockwiseButton.Visible = false;
+            rotateCounterclockwiseButton.Visible = false;
+            thumbnailPanel.Visible = false;
+            deletePromptLabel.Visible = false;
+            remainingLabel.Visible = false;
+            instructionLabel.Visible = false;
             currentBatch = null;
             remainingPhotos = null;
             losers = null;
             history.Clear();
             // Preserve batches and currentFolderPath for next batch
             ClearThumbnails();
+            UpdateSelectFolderButtonPosition();
         }
     }
 }

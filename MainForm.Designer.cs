@@ -35,10 +35,11 @@ partial class MainForm
         this.remainingLabel = new System.Windows.Forms.Label();
         this.instructionLabel = new System.Windows.Forms.Label();
         this.thumbnailPanel = new System.Windows.Forms.FlowLayoutPanel();
-        this.deleteButton = new System.Windows.Forms.Button();
-        this.cancelButton = new System.Windows.Forms.Button();
         this.menuStrip = new System.Windows.Forms.MenuStrip();
         this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+        this.rotateClockwiseButton = new System.Windows.Forms.Button();
+        this.rotateCounterclockwiseButton = new System.Windows.Forms.Button();
+        this.deletePromptLabel = new System.Windows.Forms.Label();
         ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).BeginInit();
         ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).BeginInit();
         this.thumbnailPanel.SuspendLayout();
@@ -47,7 +48,7 @@ partial class MainForm
         // 
         // selectFolderButton
         // 
-        this.selectFolderButton.Location = new System.Drawing.Point(20, 30);
+        this.selectFolderButton.Location = new System.Drawing.Point(325, 285);
         this.selectFolderButton.Name = "selectFolderButton";
         this.selectFolderButton.Size = new System.Drawing.Size(150, 30);
         this.selectFolderButton.TabIndex = 0;
@@ -57,7 +58,7 @@ partial class MainForm
         // 
         // pictureBoxLeft
         // 
-        this.pictureBoxLeft.Location = new System.Drawing.Point(20, 70);
+        this.pictureBoxLeft.Location = new System.Drawing.Point(10, 34);
         this.pictureBoxLeft.Name = "pictureBoxLeft";
         this.pictureBoxLeft.Size = new System.Drawing.Size(380, 400);
         this.pictureBoxLeft.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
@@ -67,7 +68,7 @@ partial class MainForm
         // 
         // pictureBoxRight
         // 
-        this.pictureBoxRight.Location = new System.Drawing.Point(400, 70);
+        this.pictureBoxRight.Location = new System.Drawing.Point(410, 34);
         this.pictureBoxRight.Name = "pictureBoxRight";
         this.pictureBoxRight.Size = new System.Drawing.Size(380, 400);
         this.pictureBoxRight.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
@@ -77,7 +78,7 @@ partial class MainForm
         // 
         // remainingLabel
         // 
-        this.remainingLabel.Location = new System.Drawing.Point(20, 480);
+        this.remainingLabel.Location = new System.Drawing.Point(10, 540);
         this.remainingLabel.Name = "remainingLabel";
         this.remainingLabel.Size = new System.Drawing.Size(760, 30);
         this.remainingLabel.TabIndex = 3;
@@ -86,11 +87,11 @@ partial class MainForm
         // 
         // instructionLabel
         // 
-        this.instructionLabel.Location = new System.Drawing.Point(20, 510);
+        this.instructionLabel.Location = new System.Drawing.Point(10, 570);
         this.instructionLabel.Name = "instructionLabel";
         this.instructionLabel.Size = new System.Drawing.Size(760, 60);
         this.instructionLabel.TabIndex = 4;
-        this.instructionLabel.Text = "Click or use Left/Right arrow to select a photo, Up to keep both, Down to undo, Space to keep all remaining.";
+        this.instructionLabel.Text = "Click or use Left/Right arrow to select a photo, Up to keep both, Down to undo, Q/E to rotate, W to toggle full resolution, Space to keep all remaining.";
         this.instructionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
         // 
         // thumbnailPanel
@@ -101,28 +102,6 @@ partial class MainForm
         this.thumbnailPanel.Size = new System.Drawing.Size(760, 400);
         this.thumbnailPanel.TabIndex = 5;
         this.thumbnailPanel.Visible = false;
-        // 
-        // deleteButton
-        // 
-        this.deleteButton.Location = new System.Drawing.Point(200, 480);
-        this.deleteButton.Name = "deleteButton";
-        this.deleteButton.Size = new System.Drawing.Size(150, 30);
-        this.deleteButton.TabIndex = 6;
-        this.deleteButton.Text = "Delete";
-        this.deleteButton.UseVisualStyleBackColor = true;
-        this.deleteButton.Visible = false;
-        this.deleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
-        // 
-        // cancelButton
-        // 
-        this.cancelButton.Location = new System.Drawing.Point(450, 480);
-        this.cancelButton.Name = "cancelButton";
-        this.cancelButton.Size = new System.Drawing.Size(150, 30);
-        this.cancelButton.TabIndex = 7;
-        this.cancelButton.Text = "Cancel";
-        this.cancelButton.UseVisualStyleBackColor = true;
-        this.cancelButton.Visible = false;
-        this.cancelButton.Click += new System.EventHandler(this.CancelButton_Click);
         // 
         // menuStrip
         // 
@@ -141,12 +120,45 @@ partial class MainForm
         this.settingsToolStripMenuItem.Text = "Settings";
         this.settingsToolStripMenuItem.Click += new System.EventHandler(this.SettingsToolStripMenuItem_Click);
         // 
+        // rotateClockwiseButton
+        // 
+        this.rotateClockwiseButton.Location = new System.Drawing.Point(10, 444);
+        this.rotateClockwiseButton.Name = "rotateClockwiseButton";
+        this.rotateClockwiseButton.Size = new System.Drawing.Size(100, 30);
+        this.rotateClockwiseButton.TabIndex = 9;
+        this.rotateClockwiseButton.Text = "Rotate CW";
+        this.rotateClockwiseButton.UseVisualStyleBackColor = true;
+        this.rotateClockwiseButton.Visible = false;
+        this.rotateClockwiseButton.Click += new System.EventHandler(this.RotateClockwiseButton_Click);
+        // 
+        // rotateCounterclockwiseButton
+        // 
+        this.rotateCounterclockwiseButton.Location = new System.Drawing.Point(690, 444);
+        this.rotateCounterclockwiseButton.Name = "rotateCounterclockwiseButton";
+        this.rotateCounterclockwiseButton.Size = new System.Drawing.Size(100, 30);
+        this.rotateCounterclockwiseButton.TabIndex = 10;
+        this.rotateCounterclockwiseButton.Text = "Rotate CCW";
+        this.rotateCounterclockwiseButton.UseVisualStyleBackColor = true;
+        this.rotateCounterclockwiseButton.Visible = false;
+        this.rotateCounterclockwiseButton.Click += new System.EventHandler(this.RotateCounterclockwiseButton_Click);
+        // 
+        // deletePromptLabel
+        // 
+        this.deletePromptLabel.Location = new System.Drawing.Point(20, 480);
+        this.deletePromptLabel.Name = "deletePromptLabel";
+        this.deletePromptLabel.Size = new System.Drawing.Size(760, 30);
+        this.deletePromptLabel.TabIndex = 11;
+        this.deletePromptLabel.Text = "Move to delete folder? Enter to confirm or Esc to cancel batch";
+        this.deletePromptLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+        this.deletePromptLabel.Visible = false;
+        // 
         // MainForm
         // 
         this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
         this.ClientSize = new System.Drawing.Size(800, 600);
-        this.Controls.Add(this.cancelButton);
-        this.Controls.Add(this.deleteButton);
+        this.Controls.Add(this.deletePromptLabel);
+        this.Controls.Add(this.rotateCounterclockwiseButton);
+        this.Controls.Add(this.rotateClockwiseButton);
         this.Controls.Add(this.thumbnailPanel);
         this.Controls.Add(this.instructionLabel);
         this.Controls.Add(this.remainingLabel);
@@ -173,8 +185,9 @@ partial class MainForm
     private System.Windows.Forms.Label remainingLabel;
     private System.Windows.Forms.Label instructionLabel;
     private System.Windows.Forms.FlowLayoutPanel thumbnailPanel;
-    private System.Windows.Forms.Button deleteButton;
-    private System.Windows.Forms.Button cancelButton;
     private System.Windows.Forms.MenuStrip menuStrip;
     private System.Windows.Forms.ToolStripMenuItem settingsToolStripMenuItem;
+    private System.Windows.Forms.Button rotateClockwiseButton;
+    private System.Windows.Forms.Button rotateCounterclockwiseButton;
+    private System.Windows.Forms.Label deletePromptLabel;
 }

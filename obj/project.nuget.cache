@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "gUFAAdb7JHY=",
+  "dgSpecHash": "YfrAgvBcKis=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\picksy.csproj",
+  "projectFilePath": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\Picksy.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Will\\.nuget\\packages\\metadataextractor\\2.8.1\\metadataextractor.2.8.1.nupkg.sha512",
     "C:\\Users\\Will\\.nuget\\packages\\microsoft.netcore.platforms\\2.1.2\\microsoft.netcore.platforms.2.1.2.nupkg.sha512",
