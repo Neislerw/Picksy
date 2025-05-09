@@ -5,11 +5,12 @@ namespace Picksy
 {
     public partial class SettingsForm : Form
     {
-        public SettingsForm(int currentBatchSize, int currentBatchTiming)
+        public SettingsForm(int currentBatchSize, int currentBatchTiming, bool includeSubfolders)
         {
             InitializeComponent();
             batchSizeNumericUpDown.Value = currentBatchSize;
             batchTimingNumericUpDown.Value = currentBatchTiming;
+            includeSubfoldersCheckBox.Checked = includeSubfolders;
         }
 
         public int GetBatchSizeMinimum()
@@ -20,6 +21,11 @@ namespace Picksy
         public int GetBatchTimingMaximum()
         {
             return (int)batchTimingNumericUpDown.Value;
+        }
+
+        public bool GetIncludeSubfolders()
+        {
+            return includeSubfoldersCheckBox.Checked;
         }
 
         private void SaveButton_Click(object sender, EventArgs e)

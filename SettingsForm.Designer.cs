@@ -34,6 +34,7 @@ namespace Picksy
             this.batchTimingNumericUpDown = new System.Windows.Forms.NumericUpDown();
             this.saveButton = new System.Windows.Forms.Button();
             this.cancelButton = new System.Windows.Forms.Button();
+            this.includeSubfoldersCheckBox = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.batchSizeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).BeginInit();
             this.SuspendLayout();
@@ -78,29 +79,40 @@ namespace Picksy
             // 
             // saveButton
             // 
-            this.saveButton.Location = new System.Drawing.Point(70, 90);
+            this.saveButton.Location = new System.Drawing.Point(70, 120);
             this.saveButton.Name = "saveButton";
             this.saveButton.Size = new System.Drawing.Size(75, 23);
-            this.saveButton.TabIndex = 4;
+            this.saveButton.TabIndex = 5;
             this.saveButton.Text = "Save";
             this.saveButton.UseVisualStyleBackColor = true;
             this.saveButton.Click += new System.EventHandler(this.SaveButton_Click);
             // 
             // cancelButton
             // 
-            this.cancelButton.Location = new System.Drawing.Point(150, 90);
+            this.cancelButton.Location = new System.Drawing.Point(150, 120);
             this.cancelButton.Name = "cancelButton";
             this.cancelButton.Size = new System.Drawing.Size(75, 23);
-            this.cancelButton.TabIndex = 5;
+            this.cancelButton.TabIndex = 6;
             this.cancelButton.Text = "Cancel";
             this.cancelButton.UseVisualStyleBackColor = true;
             this.cancelButton.Click += new System.EventHandler(this.CancelButton_Click);
+            // 
+            // includeSubfoldersCheckBox
+            // 
+            this.includeSubfoldersCheckBox.AutoSize = true;
+            this.includeSubfoldersCheckBox.Location = new System.Drawing.Point(20, 80);
+            this.includeSubfoldersCheckBox.Name = "includeSubfoldersCheckBox";
+            this.includeSubfoldersCheckBox.Size = new System.Drawing.Size(104, 17);
+            this.includeSubfoldersCheckBox.TabIndex = 4;
+            this.includeSubfoldersCheckBox.Text = "Include Subfolders";
+            this.includeSubfoldersCheckBox.UseVisualStyleBackColor = true;
             // 
             // SettingsForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(244, 133);
+            this.ClientSize = new System.Drawing.Size(244, 163);
+            this.Controls.Add(this.includeSubfoldersCheckBox);
             this.Controls.Add(this.cancelButton);
             this.Controls.Add(this.saveButton);
             this.Controls.Add(this.batchTimingNumericUpDown);
@@ -116,7 +128,6 @@ namespace Picksy
             ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
-
         }
 
         #endregion
@@ -127,5 +138,6 @@ namespace Picksy
         private System.Windows.Forms.NumericUpDown batchTimingNumericUpDown;
         private System.Windows.Forms.Button saveButton;
         private System.Windows.Forms.Button cancelButton;
+        private System.Windows.Forms.CheckBox includeSubfoldersCheckBox;
     }
 }

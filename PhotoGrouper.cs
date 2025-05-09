@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 
 namespace Picksy
 {
@@ -8,11 +9,13 @@ namespace Picksy
     {
         private readonly int TimeThresholdSeconds; // Max seconds between photos in a batch
         private readonly int MinBatchSize; // Minimum photos per batch
+        private readonly bool IncludeSubfolders; // Whether to include subfolders
 
-        public PhotoGrouper(int minBatchSize, int timeThresholdSeconds)
+        public PhotoGrouper(int minBatchSize, int timeThresholdSeconds, bool includeSubfolders)
         {
             MinBatchSize = minBatchSize;
             TimeThresholdSeconds = timeThresholdSeconds;
+            IncludeSubfolders = includeSubfolders;
         }
 
         public List<List<string>> GroupPhotos(string folderPath)
@@ -22,8 +25,11 @@ namespace Picksy
 
             // Get all image files
             var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
-            var files = System.IO.Directory.GetFiles(folderPath)
+            var searchOption = IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            var files = System.IO.Directory.GetFiles(folderPath, "*.*", searchOption)
                 .Where(f => imageExtensions.Contains(System.IO.Path.GetExtension(f).ToLower()))
+                // Exclude files in the _delete folder
+                .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                 .ToList();
 
             // Extract timestamps from filenames
@@ -51,16 +57,10 @@ namespace Picksy
             // Sort photos by timestamp
             photos.Sort((a, b) =>
             {
-                // Handle null cases explicitly
-                if (a.Timestamp is not DateTime aTime)
-                {
-                    return b.Timestamp is not DateTime _ ? 0 : -1;
-                }
-                if (b.Timestamp is not DateTime bTime)
-                {
-                    return 1;
-                }
-                return aTime.CompareTo(bTime);
+                if (a.Timestamp is null && b.Timestamp is null) return 0;
+                if (a.Timestamp is null) return -1;
+                if (b.Timestamp is null) return 1;
+                return a.Timestamp.Value.CompareTo(b.Timestamp.Value);
             });
 
             // Group photos
