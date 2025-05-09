@@ -2,8 +2,6 @@
 
 ![Picksy Logo](Resources/logo.png)
 
-Picksy is an open-source Windows application that helps you organize photos by grouping them into batches based on timestamped filenames and selecting favorites through a tournament-style comparison. Non-selected photos can be moved to a "_delete" folder or kept.
-
 Picksy is a Windows Application that helps you slim down your photo albums by grouping images in to batches and letting you systematically select favorites.  Non-Selected images are moved to a "_delete" folder where you can delete permenantly or archive.
 
 ## Features

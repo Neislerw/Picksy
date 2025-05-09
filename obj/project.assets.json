@@ -198,19 +198,19 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\Will\\.nuget\\packages\\": {}
+    "C:\\Users\\neisl\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\Picksy.csproj",
+      "projectUniqueName": "E:\\Documents\\Coding\\Picksy\\Picksy.csproj",
       "projectName": "Picksy",
-      "projectPath": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\Picksy.csproj",
-      "packagesPath": "C:\\Users\\Will\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Will\\Documents\\Coding\\Picksy\\obj\\",
+      "projectPath": "E:\\Documents\\Coding\\Picksy\\Picksy.csproj",
+      "packagesPath": "C:\\Users\\neisl\\.nuget\\packages\\",
+      "outputPath": "E:\\Documents\\Coding\\Picksy\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\Will\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "C:\\Users\\neisl\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net9.0-windows"

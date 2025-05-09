@@ -1,96 +1,87 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
+using System.Linq;
 
 namespace Picksy
 {
     public class PhotoGrouper
     {
-        private readonly int TimeThresholdSeconds; // Max seconds between photos in a batch
-        private readonly int MinBatchSize; // Minimum photos per batch
-        private readonly bool IncludeSubfolders; // Whether to include subfolders
+        private readonly int batchSizeMinimum;
+        private readonly int batchTimingMaximum;
+        private readonly bool includeSubfolders;
+        private readonly string batchSelectionMethod;
 
-        public PhotoGrouper(int minBatchSize, int timeThresholdSeconds, bool includeSubfolders)
+        public PhotoGrouper(int batchSizeMinimum, int batchTimingMaximum, bool includeSubfolders, string batchSelectionMethod)
         {
-            MinBatchSize = minBatchSize;
-            TimeThresholdSeconds = timeThresholdSeconds;
-            IncludeSubfolders = includeSubfolders;
+            this.batchSizeMinimum = batchSizeMinimum;
+            this.batchTimingMaximum = batchTimingMaximum;
+            this.includeSubfolders = includeSubfolders;
+            this.batchSelectionMethod = batchSelectionMethod;
         }
 
         public List<List<string>> GroupPhotos(string folderPath)
         {
-            var batches = new List<List<string>>();
-            var photos = new List<(string Path, DateTime? Timestamp)>();
-
-            // Get all image files
             var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
-            var searchOption = IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            var files = System.IO.Directory.GetFiles(folderPath, "*.*", searchOption)
-                .Where(f => imageExtensions.Contains(System.IO.Path.GetExtension(f).ToLower()))
-                // Exclude files in the _delete folder
+            var searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+
+            // Get all image files, excluding those in _delete folder
+            var allPhotos = Directory.GetFiles(folderPath, "*.*", searchOption)
+                .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                 .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                 .ToList();
 
-            // Extract timestamps from filenames
-            foreach (var file in files)
+            // Sort photos based on the selected batch selection method
+            switch (batchSelectionMethod)
             {
-                try
-                {
-                    var fileName = System.IO.Path.GetFileNameWithoutExtension(file);
-                    // Expect format: YYYYMMDD_HHMMSS_XXX (e.g., 20250122_171223_003)
-                    if (fileName.Length >= 15 && fileName[8] == '_')
-                    {
-                        var dateTimeStr = fileName.Substring(0, 15); // YYYYMMDD_HHMMSS
-                        if (DateTime.TryParseExact(dateTimeStr, "yyyyMMdd_HHmmss", null, System.Globalization.DateTimeStyles.None, out var dateTime))
-                        {
-                            photos.Add((file, dateTime));
-                        }
-                    }
-                }
-                catch
-                {
-                    // Skip files with errors
-                }
+                case "By Name":
+                    allPhotos.Sort((a, b) => string.Compare(Path.GetFileName(a), Path.GetFileName(b), StringComparison.OrdinalIgnoreCase));
+                    break;
+                case "By Date Created":
+                    allPhotos.Sort((a, b) => File.GetCreationTime(a).CompareTo(File.GetCreationTime(b)));
+                    break;
+                case "By Date Modified":
+                    allPhotos.Sort((a, b) => File.GetLastWriteTime(a).CompareTo(File.GetLastWriteTime(b)));
+                    break;
+                default:
+                    throw new ArgumentException("Invalid batch selection method");
             }
 
-            // Sort photos by timestamp
-            photos.Sort((a, b) =>
-            {
-                if (a.Timestamp is null && b.Timestamp is null) return 0;
-                if (a.Timestamp is null) return -1;
-                if (b.Timestamp is null) return 1;
-                return a.Timestamp.Value.CompareTo(b.Timestamp.Value);
-            });
-
-            // Group photos
+            var batches = new List<List<string>>();
             var currentBatch = new List<string>();
-            for (int i = 0; i < photos.Count; i++)
+            DateTime? lastPhotoTime = null;
+
+            foreach (var photo in allPhotos)
             {
-                if (!photos[i].Timestamp.HasValue) continue;
-
-                currentBatch.Add(photos[i].Path);
-
-                // Check if next photo is within time threshold
-                if (i < photos.Count - 1 && photos[i + 1].Timestamp.HasValue)
+                DateTime currentPhotoTime;
+                if (batchSelectionMethod == "By Date Created")
                 {
-                    var timeDiff = (photos[i + 1].Timestamp.Value - photos[i].Timestamp.Value).TotalSeconds;
-                    if (timeDiff > TimeThresholdSeconds)
-                    {
-                        // End current batch if gap is too large
-                        if (currentBatch.Count >= MinBatchSize)
-                        {
-                            batches.Add(new List<string>(currentBatch));
-                        }
-                        currentBatch.Clear();
-                    }
+                    currentPhotoTime = File.GetCreationTime(photo);
                 }
+                else
+                {
+                    currentPhotoTime = File.GetLastWriteTime(photo);
+                }
+
+                if (lastPhotoTime == null || (currentPhotoTime - lastPhotoTime.Value).TotalSeconds <= batchTimingMaximum)
+                {
+                    currentBatch.Add(photo);
+                }
+                else
+                {
+                    if (currentBatch.Count >= batchSizeMinimum)
+                    {
+                        batches.Add(currentBatch);
+                    }
+                    currentBatch = new List<string> { photo };
+                }
+
+                lastPhotoTime = currentPhotoTime;
             }
 
-            // Add the last batch if it meets the threshold
-            if (currentBatch.Count >= MinBatchSize)
+            if (currentBatch.Count >= batchSizeMinimum)
             {
-                batches.Add(new List<string>(currentBatch));
+                batches.Add(currentBatch);
             }
 
             return batches;

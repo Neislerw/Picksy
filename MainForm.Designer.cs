@@ -40,6 +40,8 @@ partial class MainForm
         this.rotateCounterclockwiseButton = new System.Windows.Forms.Button();
         this.deletePromptLabel = new System.Windows.Forms.Label();
         this.settingsGroupBox = new System.Windows.Forms.GroupBox();
+        this.batchSelectionMethodComboBox = new System.Windows.Forms.ComboBox();
+        this.batchSelectionMethodLabel = new System.Windows.Forms.Label();
         this.skipConfirmationCheckBox = new System.Windows.Forms.CheckBox();
         this.batchTimingDescriptionLabel = new System.Windows.Forms.Label();
         this.batchSizeDescriptionLabel = new System.Windows.Forms.Label();
@@ -62,7 +64,7 @@ partial class MainForm
         // 
         // selectFolderButton
         // 
-        this.selectFolderButton.Location = new System.Drawing.Point(325, 460);
+        this.selectFolderButton.Location = new System.Drawing.Point(325, 480);
         this.selectFolderButton.Name = "selectFolderButton";
         this.selectFolderButton.Size = new System.Drawing.Size(150, 30);
         this.selectFolderButton.TabIndex = 0;
@@ -159,6 +161,8 @@ partial class MainForm
         // 
         // settingsGroupBox
         // 
+        this.settingsGroupBox.Controls.Add(this.batchSelectionMethodComboBox);
+        this.settingsGroupBox.Controls.Add(this.batchSelectionMethodLabel);
         this.settingsGroupBox.Controls.Add(this.skipConfirmationCheckBox);
         this.settingsGroupBox.Controls.Add(this.batchTimingDescriptionLabel);
         this.settingsGroupBox.Controls.Add(this.batchSizeDescriptionLabel);
@@ -168,11 +172,29 @@ partial class MainForm
         this.settingsGroupBox.Controls.Add(this.batchSizeNumericUpDown);
         this.settingsGroupBox.Controls.Add(this.batchSizeLabel);
         this.settingsGroupBox.Controls.Add(this.settingsHeaderLabel);
-        this.settingsGroupBox.Location = new System.Drawing.Point(175, 130);
+        this.settingsGroupBox.Location = new System.Drawing.Point(175, 110);
         this.settingsGroupBox.Name = "settingsGroupBox";
-        this.settingsGroupBox.Size = new System.Drawing.Size(450, 340);
+        this.settingsGroupBox.Size = new System.Drawing.Size(450, 360);
         this.settingsGroupBox.TabIndex = 17;
         this.settingsGroupBox.TabStop = false;
+        // 
+        // batchSelectionMethodComboBox
+        // 
+        this.batchSelectionMethodComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+        this.batchSelectionMethodComboBox.FormattingEnabled = true;
+        this.batchSelectionMethodComboBox.Location = new System.Drawing.Point(300, 298);
+        this.batchSelectionMethodComboBox.Name = "batchSelectionMethodComboBox";
+        this.batchSelectionMethodComboBox.Size = new System.Drawing.Size(130, 21);
+        this.batchSelectionMethodComboBox.TabIndex = 9;
+        // 
+        // batchSelectionMethodLabel
+        // 
+        this.batchSelectionMethodLabel.AutoSize = true;
+        this.batchSelectionMethodLabel.Location = new System.Drawing.Point(20, 300);
+        this.batchSelectionMethodLabel.Name = "batchSelectionMethodLabel";
+        this.batchSelectionMethodLabel.Size = new System.Drawing.Size(132, 13);
+        this.batchSelectionMethodLabel.TabIndex = 8;
+        this.batchSelectionMethodLabel.Text = "Batch Selection Method:";
         // 
         // skipConfirmationCheckBox
         // 
@@ -266,7 +288,7 @@ partial class MainForm
         // 
         this.logoPictureBox.Location = new System.Drawing.Point(350, 50);
         this.logoPictureBox.Name = "logoPictureBox";
-        this.logoPictureBox.Size = new System.Drawing.Size(300, 100);
+        this.logoPictureBox.Size = new System.Drawing.Size(100, 300);
         this.logoPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
         this.logoPictureBox.TabIndex = 18;
         this.logoPictureBox.TabStop = false;
@@ -326,4 +348,6 @@ partial class MainForm
     private System.Windows.Forms.Label batchSizeLabel;
     private System.Windows.Forms.Label settingsHeaderLabel;
     private System.Windows.Forms.PictureBox logoPictureBox;
+    private System.Windows.Forms.ComboBox batchSelectionMethodComboBox;
+    private System.Windows.Forms.Label batchSelectionMethodLabel;
 }
