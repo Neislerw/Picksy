@@ -1,9 +1,11 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
 using System.Drawing.Drawing2D;
+using System.Linq;
 
 namespace Picksy
 {
@@ -61,7 +63,7 @@ namespace Picksy
             int batchSizeMinimum = (int)batchSizeNumericUpDown.Value;
             int batchTimingMaximum = (int)batchTimingNumericUpDown.Value;
             bool includeSubfolders = includeSubfoldersCheckBox.Checked;
-            string batchSelectionMethod = batchSelectionMethodComboBox.SelectedItem.ToString();
+            string? batchSelectionMethod = batchSelectionMethodComboBox.SelectedItem?.ToString();
 
             if (batchSizeMinimum < 2 || batchSizeMinimum > 100)
             {
@@ -73,17 +75,26 @@ namespace Picksy
                 MessageBox.Show("Batch Timing Maximum must be between 1 and 600 seconds.", "Invalid Input");
                 return;
             }
-
-            // Show message about phone folder limitation
-            MessageBox.Show("Note: Phone folders may not appear in the folder selection dialog. Please copy photos to a local folder on your PC and select that folder.", "Picksy Info");
+            if (string.IsNullOrEmpty(batchSelectionMethod))
+            {
+                MessageBox.Show("Please select a batch selection method.", "Invalid Input");
+                return;
+            }
 
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
+                dialog.Description = "Select a folder containing photos";
+                dialog.ShowNewFolderButton = false;
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     try
                     {
                         currentFolderPath = dialog.SelectedPath;
+                        if (string.IsNullOrEmpty(currentFolderPath) || !Directory.Exists(currentFolderPath))
+                        {
+                            throw new InvalidOperationException($"Invalid or inaccessible folder selected. Path: {currentFolderPath}");
+                        }
+
                         // Count initial image files
                         var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
                         var searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
@@ -108,6 +119,14 @@ namespace Picksy
                     catch (Exception ex)
                     {
                         MessageBox.Show($"Error scanning folder: {ex.Message}", "Picksy Error");
+                        try
+                        {
+                            File.WriteAllText("picksy_error.log", $"Error details: {ex}\nAttempted path: {dialog.SelectedPath}\nTimestamp: {DateTime.Now}");
+                        }
+                        catch
+                        {
+                            Console.WriteLine($"Error details: {ex}\nAttempted path: {dialog.SelectedPath}");
+                        }
                     }
                 }
             }
@@ -193,6 +212,9 @@ namespace Picksy
                     pictureBoxLeft.Image = CreateThumbnail(leftImage, leftRotation);
                     pictureBoxRight.Image = CreateThumbnail(rightImage, rightRotation);
                 }
+                // Set tooltips with filenames
+                toolTipLeft.SetToolTip(pictureBoxLeft, Path.GetFileName(remainingPhotos[currentPairIndex]));
+                toolTipRight.SetToolTip(pictureBoxRight, Path.GetFileName(remainingPhotos[currentPairIndex + 1]));
             }
             catch (Exception ex)
             {
