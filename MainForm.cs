@@ -22,6 +22,9 @@ namespace Picksy
         private bool includeSubfolders = false; // Default
         private Dictionary<string, int> photoRotations; // Track rotation angle (degrees) per photo
         private bool showFullResolution = false; // Track full-resolution toggle
+        private int initialFileCount = 0; // Total files in folder at start
+        private int totalBatchPhotos = 0; // Total photos in all batches
+        private int deletedPhotosCount = 0; // Total photos moved to _delete
 
         public MainForm()
         {
@@ -59,9 +62,18 @@ namespace Picksy
                     try
                     {
                         currentFolderPath = dialog.SelectedPath;
+                        // Count initial image files
+                        var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
+                        var searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+                        initialFileCount = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
+                            .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
+                            .Count();
                         var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders);
                         batches = grouper.GroupPhotos(dialog.SelectedPath);
                         currentBatchIndex = 0;
+                        totalBatchPhotos = 0;
+                        deletedPhotosCount = 0;
                         if (batches.Count > 0)
                         {
                             StartTournament(batches[0]);
@@ -110,6 +122,7 @@ namespace Picksy
             {
                 photoRotations[photo] = 0; // Initialize rotation to 0 degrees
             }
+            totalBatchPhotos += batch.Count; // Track total photos in batches
             currentPairIndex = 0;
             showFullResolution = false;
             selectFolderButton.Visible = false;
@@ -559,6 +572,9 @@ namespace Picksy
                     File.Move(photo, destPath);
                 }
 
+                // Track deleted photos
+                deletedPhotosCount += currentBatch.Count;
+
                 // Clear current batch and advance
                 currentBatch = null;
                 remainingPhotos = null;
@@ -598,6 +614,9 @@ namespace Picksy
                     }
                     File.Move(loser, destPath);
                 }
+
+                // Track deleted photos
+                deletedPhotosCount += losers.Count;
 
                 MoveToNextBatch();
             }
@@ -657,15 +676,14 @@ namespace Picksy
                         deleteFolderSizeMB = totalBytes / (1024.0 * 1024.0); // Convert bytes to MB
                     }
                 }
-                if (deleteFolderSizeMB > 1024)
-                {
-                    double deleteFolderSizeGB = deleteFolderSizeMB / 1024.0;
-                    MessageBox.Show($"All batches completed. {deleteFolderSizeGB:F1} GB Saved!", "Picksy");
-                }
-                else
-                {
-                    MessageBox.Show($"All batches completed. {deleteFolderSizeMB:F2} MB Saved!", "Picksy");
-                }
+                string sizeMessage = deleteFolderSizeMB > 1024
+                    ? $"{deleteFolderSizeMB / 1024.0:F1} GB"
+                    : $"{deleteFolderSizeMB:F2} MB";
+                string message = $"No more batches remain!\n\n" +
+                                $"You just processed {batches?.Count ?? 0} batches, containing {totalBatchPhotos} photos, " +
+                                $"eliminating {deletedPhotosCount} of them and saving {sizeMessage}!\n\n" +
+                                $"When you are ready, erase the '_delete' folder to permanently remove those files";
+                MessageBox.Show(message, "Picksy");
             }
         }
 
