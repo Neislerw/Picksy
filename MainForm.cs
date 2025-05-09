@@ -28,6 +28,9 @@ namespace Picksy
             InitializeComponent();
             history = new Stack<(string? Loser, bool KeptBoth)>();
             photoRotations = new Dictionary<string, int>();
+            // Initialize Batch Selection Method ComboBox
+            batchSelectionMethodComboBox.Items.AddRange(new[] { "By Name", "By Date Created", "By Date Modified" });
+            batchSelectionMethodComboBox.SelectedIndex = 0; // Default to "By Name"
             // Ensure initial UI state is clean
             pictureBoxLeft.Visible = false;
             pictureBoxRight.Visible = false;
@@ -58,6 +61,7 @@ namespace Picksy
             int batchSizeMinimum = (int)batchSizeNumericUpDown.Value;
             int batchTimingMaximum = (int)batchTimingNumericUpDown.Value;
             bool includeSubfolders = includeSubfoldersCheckBox.Checked;
+            string batchSelectionMethod = batchSelectionMethodComboBox.SelectedItem.ToString();
 
             if (batchSizeMinimum < 2 || batchSizeMinimum > 100)
             {
@@ -69,6 +73,9 @@ namespace Picksy
                 MessageBox.Show("Batch Timing Maximum must be between 1 and 600 seconds.", "Invalid Input");
                 return;
             }
+
+            // Show message about phone folder limitation
+            MessageBox.Show("Note: Phone folders may not appear in the folder selection dialog. Please copy photos to a local folder on your PC and select that folder.", "Picksy Info");
 
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
@@ -84,7 +91,7 @@ namespace Picksy
                             .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                             .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                             .Count();
-                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders);
+                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchSelectionMethod);
                         batches = grouper.GroupPhotos(dialog.SelectedPath);
                         currentBatchIndex = 0;
                         totalBatchPhotos = 0;
