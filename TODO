@@ -1,5 +1,6 @@
 - Add Ability to Rotate batches of photos
-- Add ability to Set "Batch Threshold" (ie 2 photos or 10 photos which would distinguish what constitutes a 'batch')
+- settings - Add ability to Set "Batch Threshold" (ie 2 photos or 10 photos which would distinguish what constitutes a 'batch')
+- settings - Add ability to change the amount of time between photos to count as a batch
 - Add Space Saved Dialog (ie "You just saved 329.2MB of Storage)
 - Better UI
     - show controls more cleanly
