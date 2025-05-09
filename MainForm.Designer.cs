@@ -288,7 +288,7 @@ partial class MainForm
         // 
         this.logoPictureBox.Location = new System.Drawing.Point(350, 50);
         this.logoPictureBox.Name = "logoPictureBox";
-        this.logoPictureBox.Size = new System.Drawing.Size(100, 300);
+        this.logoPictureBox.Size = new System.Drawing.Size(300, 100);
         this.logoPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
         this.logoPictureBox.TabIndex = 18;
         this.logoPictureBox.TabStop = false;
