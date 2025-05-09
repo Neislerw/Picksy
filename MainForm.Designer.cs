@@ -246,7 +246,7 @@
             this.batchTimingNumericUpDown.Name = "batchTimingNumericUpDown";
             this.batchTimingNumericUpDown.Size = new System.Drawing.Size(60, 20);
             this.batchTimingNumericUpDown.TabIndex = 3;
-            this.batchTimingNumericUpDown.Value = 20;
+            this.batchTimingNumericUpDown.Value = 300;
             // 
             // batchTimingLabel
             // 
