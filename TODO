@@ -5,4 +5,6 @@
     - show controls more cleanly
     - Thumbnails scale to fit
     - Show Preview of 'batches' by showing a stack of images with a thumbnail, before starting processing
-    - Add Ability to Rotate batches of photos
+    - ~~ Add Ability to Rotate batches of photos
+- Checkbox for "Include Subfolders"
+- Additional batch selection methods(by date created, manual thumbnail selection, by filename)
