@@ -36,19 +36,33 @@ partial class MainForm
         this.instructionLabel = new System.Windows.Forms.Label();
         this.thumbnailPanel = new System.Windows.Forms.FlowLayoutPanel();
         this.menuStrip = new System.Windows.Forms.MenuStrip();
-        this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
         this.rotateClockwiseButton = new System.Windows.Forms.Button();
         this.rotateCounterclockwiseButton = new System.Windows.Forms.Button();
         this.deletePromptLabel = new System.Windows.Forms.Label();
+        this.settingsGroupBox = new System.Windows.Forms.GroupBox();
+        this.skipConfirmationCheckBox = new System.Windows.Forms.CheckBox();
+        this.batchTimingDescriptionLabel = new System.Windows.Forms.Label();
+        this.batchSizeDescriptionLabel = new System.Windows.Forms.Label();
+        this.includeSubfoldersCheckBox = new System.Windows.Forms.CheckBox();
+        this.batchTimingNumericUpDown = new System.Windows.Forms.NumericUpDown();
+        this.batchTimingLabel = new System.Windows.Forms.Label();
+        this.batchSizeNumericUpDown = new System.Windows.Forms.NumericUpDown();
+        this.batchSizeLabel = new System.Windows.Forms.Label();
+        this.settingsHeaderLabel = new System.Windows.Forms.Label();
+        this.logoPictureBox = new System.Windows.Forms.PictureBox();
         ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).BeginInit();
         ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).BeginInit();
         this.thumbnailPanel.SuspendLayout();
         this.menuStrip.SuspendLayout();
+        this.settingsGroupBox.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)(this.batchSizeNumericUpDown)).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).BeginInit();
         this.SuspendLayout();
         // 
         // selectFolderButton
         // 
-        this.selectFolderButton.Location = new System.Drawing.Point(325, 285);
+        this.selectFolderButton.Location = new System.Drawing.Point(325, 460);
         this.selectFolderButton.Name = "selectFolderButton";
         this.selectFolderButton.Size = new System.Drawing.Size(150, 30);
         this.selectFolderButton.TabIndex = 0;
@@ -105,20 +119,11 @@ partial class MainForm
         // 
         // menuStrip
         // 
-        this.menuStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.settingsToolStripMenuItem});
         this.menuStrip.Location = new System.Drawing.Point(0, 0);
         this.menuStrip.Name = "menuStrip";
         this.menuStrip.Size = new System.Drawing.Size(800, 24);
         this.menuStrip.TabIndex = 8;
         this.menuStrip.Text = "menuStrip";
-        // 
-        // settingsToolStripMenuItem
-        // 
-        this.settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
-        this.settingsToolStripMenuItem.Size = new System.Drawing.Size(61, 20);
-        this.settingsToolStripMenuItem.Text = "Settings";
-        this.settingsToolStripMenuItem.Click += new System.EventHandler(this.SettingsToolStripMenuItem_Click);
         // 
         // rotateClockwiseButton
         // 
@@ -152,10 +157,126 @@ partial class MainForm
         this.deletePromptLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
         this.deletePromptLabel.Visible = false;
         // 
+        // settingsGroupBox
+        // 
+        this.settingsGroupBox.Controls.Add(this.skipConfirmationCheckBox);
+        this.settingsGroupBox.Controls.Add(this.batchTimingDescriptionLabel);
+        this.settingsGroupBox.Controls.Add(this.batchSizeDescriptionLabel);
+        this.settingsGroupBox.Controls.Add(this.includeSubfoldersCheckBox);
+        this.settingsGroupBox.Controls.Add(this.batchTimingNumericUpDown);
+        this.settingsGroupBox.Controls.Add(this.batchTimingLabel);
+        this.settingsGroupBox.Controls.Add(this.batchSizeNumericUpDown);
+        this.settingsGroupBox.Controls.Add(this.batchSizeLabel);
+        this.settingsGroupBox.Controls.Add(this.settingsHeaderLabel);
+        this.settingsGroupBox.Location = new System.Drawing.Point(175, 130);
+        this.settingsGroupBox.Name = "settingsGroupBox";
+        this.settingsGroupBox.Size = new System.Drawing.Size(450, 340);
+        this.settingsGroupBox.TabIndex = 17;
+        this.settingsGroupBox.TabStop = false;
+        // 
+        // skipConfirmationCheckBox
+        // 
+        this.skipConfirmationCheckBox.AutoSize = true;
+        this.skipConfirmationCheckBox.Location = new System.Drawing.Point(20, 260);
+        this.skipConfirmationCheckBox.Name = "skipConfirmationCheckBox";
+        this.skipConfirmationCheckBox.Size = new System.Drawing.Size(179, 17);
+        this.skipConfirmationCheckBox.TabIndex = 7;
+        this.skipConfirmationCheckBox.Text = "Skip Confirmation between batches";
+        this.skipConfirmationCheckBox.UseVisualStyleBackColor = true;
+        // 
+        // batchTimingDescriptionLabel
+        // 
+        this.batchTimingDescriptionLabel.AutoSize = true;
+        this.batchTimingDescriptionLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Italic, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+        this.batchTimingDescriptionLabel.Location = new System.Drawing.Point(20, 160);
+        this.batchTimingDescriptionLabel.Name = "batchTimingDescriptionLabel";
+        this.batchTimingDescriptionLabel.Size = new System.Drawing.Size(260, 39);
+        this.batchTimingDescriptionLabel.TabIndex = 6;
+        this.batchTimingDescriptionLabel.Text = "The maximum amount of seconds between photos to\r\nstill be considered part of the same batch";
+        // 
+        // batchSizeDescriptionLabel
+        // 
+        this.batchSizeDescriptionLabel.AutoSize = true;
+        this.batchSizeDescriptionLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Italic, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+        this.batchSizeDescriptionLabel.Location = new System.Drawing.Point(20, 80);
+        this.batchSizeDescriptionLabel.Name = "batchSizeDescriptionLabel";
+        this.batchSizeDescriptionLabel.Size = new System.Drawing.Size(248, 26);
+        this.batchSizeDescriptionLabel.TabIndex = 5;
+        this.batchSizeDescriptionLabel.Text = "The minimum number of closely timed photos to be\r\nconsidered a Batch";
+        // 
+        // includeSubfoldersCheckBox
+        // 
+        this.includeSubfoldersCheckBox.AutoSize = true;
+        this.includeSubfoldersCheckBox.Location = new System.Drawing.Point(20, 220);
+        this.includeSubfoldersCheckBox.Name = "includeSubfoldersCheckBox";
+        this.includeSubfoldersCheckBox.Size = new System.Drawing.Size(104, 17);
+        this.includeSubfoldersCheckBox.TabIndex = 4;
+        this.includeSubfoldersCheckBox.Text = "Include Subfolders";
+        this.includeSubfoldersCheckBox.UseVisualStyleBackColor = true;
+        // 
+        // batchTimingNumericUpDown
+        // 
+        this.batchTimingNumericUpDown.Location = new System.Drawing.Point(300, 138);
+        this.batchTimingNumericUpDown.Maximum = 600;
+        this.batchTimingNumericUpDown.Minimum = 1;
+        this.batchTimingNumericUpDown.Name = "batchTimingNumericUpDown";
+        this.batchTimingNumericUpDown.Size = new System.Drawing.Size(60, 20);
+        this.batchTimingNumericUpDown.TabIndex = 3;
+        this.batchTimingNumericUpDown.Value = 20;
+        // 
+        // batchTimingLabel
+        // 
+        this.batchTimingLabel.AutoSize = true;
+        this.batchTimingLabel.Location = new System.Drawing.Point(20, 140);
+        this.batchTimingLabel.Name = "batchTimingLabel";
+        this.batchTimingLabel.Size = new System.Drawing.Size(154, 13);
+        this.batchTimingLabel.TabIndex = 2;
+        this.batchTimingLabel.Text = "Batch Timing Maximum (1–600s):";
+        // 
+        // batchSizeNumericUpDown
+        // 
+        this.batchSizeNumericUpDown.Location = new System.Drawing.Point(300, 58);
+        this.batchSizeNumericUpDown.Maximum = 100;
+        this.batchSizeNumericUpDown.Minimum = 2;
+        this.batchSizeNumericUpDown.Name = "batchSizeNumericUpDown";
+        this.batchSizeNumericUpDown.Size = new System.Drawing.Size(60, 20);
+        this.batchSizeNumericUpDown.TabIndex = 1;
+        this.batchSizeNumericUpDown.Value = 4;
+        // 
+        // batchSizeLabel
+        // 
+        this.batchSizeLabel.AutoSize = true;
+        this.batchSizeLabel.Location = new System.Drawing.Point(20, 60);
+        this.batchSizeLabel.Name = "batchSizeLabel";
+        this.batchSizeLabel.Size = new System.Drawing.Size(139, 13);
+        this.batchSizeLabel.TabIndex = 0;
+        this.batchSizeLabel.Text = "Batch Size Minimum (2–100):";
+        // 
+        // settingsHeaderLabel
+        // 
+        this.settingsHeaderLabel.AutoSize = true;
+        this.settingsHeaderLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+        this.settingsHeaderLabel.Location = new System.Drawing.Point(20, 20);
+        this.settingsHeaderLabel.Name = "settingsHeaderLabel";
+        this.settingsHeaderLabel.Size = new System.Drawing.Size(76, 20);
+        this.settingsHeaderLabel.TabIndex = 0;
+        this.settingsHeaderLabel.Text = "Settings:";
+        // 
+        // logoPictureBox
+        // 
+        this.logoPictureBox.Location = new System.Drawing.Point(350, 50);
+        this.logoPictureBox.Name = "logoPictureBox";
+        this.logoPictureBox.Size = new System.Drawing.Size(300, 100);
+        this.logoPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+        this.logoPictureBox.TabIndex = 18;
+        this.logoPictureBox.TabStop = false;
+        // 
         // MainForm
         // 
         this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
         this.ClientSize = new System.Drawing.Size(800, 600);
+        this.Controls.Add(this.logoPictureBox);
+        this.Controls.Add(this.settingsGroupBox);
         this.Controls.Add(this.deletePromptLabel);
         this.Controls.Add(this.rotateCounterclockwiseButton);
         this.Controls.Add(this.rotateClockwiseButton);
@@ -173,6 +294,11 @@ partial class MainForm
         this.thumbnailPanel.ResumeLayout(false);
         this.menuStrip.ResumeLayout(false);
         this.menuStrip.PerformLayout();
+        this.settingsGroupBox.ResumeLayout(false);
+        this.settingsGroupBox.PerformLayout();
+        ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).EndInit();
+        ((System.ComponentModel.ISupportInitialize)(this.batchSizeNumericUpDown)).EndInit();
+        ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).EndInit();
         this.ResumeLayout(false);
         this.PerformLayout();
     }
@@ -186,8 +312,18 @@ partial class MainForm
     private System.Windows.Forms.Label instructionLabel;
     private System.Windows.Forms.FlowLayoutPanel thumbnailPanel;
     private System.Windows.Forms.MenuStrip menuStrip;
-    private System.Windows.Forms.ToolStripMenuItem settingsToolStripMenuItem;
     private System.Windows.Forms.Button rotateClockwiseButton;
     private System.Windows.Forms.Button rotateCounterclockwiseButton;
     private System.Windows.Forms.Label deletePromptLabel;
+    private System.Windows.Forms.GroupBox settingsGroupBox;
+    private System.Windows.Forms.CheckBox skipConfirmationCheckBox;
+    private System.Windows.Forms.Label batchTimingDescriptionLabel;
+    private System.Windows.Forms.Label batchSizeDescriptionLabel;
+    private System.Windows.Forms.CheckBox includeSubfoldersCheckBox;
+    private System.Windows.Forms.NumericUpDown batchTimingNumericUpDown;
+    private System.Windows.Forms.Label batchTimingLabel;
+    private System.Windows.Forms.NumericUpDown batchSizeNumericUpDown;
+    private System.Windows.Forms.Label batchSizeLabel;
+    private System.Windows.Forms.Label settingsHeaderLabel;
+    private System.Windows.Forms.PictureBox logoPictureBox;
 }

@@ -17,9 +17,6 @@ namespace Picksy
         private string? currentFolderPath;
         private int currentBatchIndex;
         private Stack<(string? Loser, bool KeptBoth)> history;
-        private int batchSizeMinimum = 4; // Default
-        private int batchTimingMaximum = 20; // Default in seconds
-        private bool includeSubfolders = false; // Default
         private Dictionary<string, int> photoRotations; // Track rotation angle (degrees) per photo
         private bool showFullResolution = false; // Track full-resolution toggle
         private int initialFileCount = 0; // Total files in folder at start
@@ -41,20 +38,38 @@ namespace Picksy
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
             selectFolderButton.Visible = true;
+            settingsGroupBox.Visible = true;
+            logoPictureBox.Visible = true;
             selectFolderButton.BringToFront(); // Ensure button is on top
             try
             {
                 this.Icon = new Icon("Resources\\logo.ico");
+                logoPictureBox.Image = Image.FromFile("Resources\\logo.png");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading icon: {ex.Message}", "Picksy Error");
+                MessageBox.Show($"Error loading icon or logo: {ex.Message}", "Picksy Error");
             }
-            UpdateSelectFolderButtonPosition();
+            UpdateMainPageControlsPosition();
         }
 
         private void SelectFolderButton_Click(object sender, EventArgs e)
         {
+            int batchSizeMinimum = (int)batchSizeNumericUpDown.Value;
+            int batchTimingMaximum = (int)batchTimingNumericUpDown.Value;
+            bool includeSubfolders = includeSubfoldersCheckBox.Checked;
+
+            if (batchSizeMinimum < 2 || batchSizeMinimum > 100)
+            {
+                MessageBox.Show("Batch Size Minimum must be between 2 and 100.", "Invalid Input");
+                return;
+            }
+            if (batchTimingMaximum < 1 || batchTimingMaximum > 600)
+            {
+                MessageBox.Show("Batch Timing Maximum must be between 1 and 600 seconds.", "Invalid Input");
+                return;
+            }
+
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
@@ -91,24 +106,11 @@ namespace Picksy
             }
         }
 
-        private void SettingsToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            using (var settingsForm = new SettingsForm(batchSizeMinimum, batchTimingMaximum, includeSubfolders))
-            {
-                if (settingsForm.ShowDialog() == DialogResult.OK)
-                {
-                    batchSizeMinimum = settingsForm.GetBatchSizeMinimum();
-                    batchTimingMaximum = settingsForm.GetBatchTimingMaximum();
-                    includeSubfolders = settingsForm.GetIncludeSubfolders();
-                }
-            }
-        }
-
         private void StartTournament(List<string> batch)
         {
-            if (batch == null || batch.Count < batchSizeMinimum)
+            if (batch == null || batch.Count < (int)batchSizeNumericUpDown.Value)
             {
-                MessageBox.Show("Invalid batch. At least " + batchSizeMinimum + " photos required.", "Picksy");
+                MessageBox.Show("Invalid batch. At least " + batchSizeNumericUpDown.Value + " photos required.", "Picksy");
                 ResetUI();
                 return;
             }
@@ -126,6 +128,8 @@ namespace Picksy
             currentPairIndex = 0;
             showFullResolution = false;
             selectFolderButton.Visible = false;
+            settingsGroupBox.Visible = false;
+            logoPictureBox.Visible = false;
             thumbnailPanel.Visible = false;
             deletePromptLabel.Visible = false;
             pictureBoxLeft.Visible = true;
@@ -278,12 +282,25 @@ namespace Picksy
             deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 10);
         }
 
-        private void UpdateSelectFolderButtonPosition()
+        private void UpdateMainPageControlsPosition()
         {
-            // Center the select folder button
-            int x = (ClientSize.Width - selectFolderButton.Width) / 2;
-            int y = (ClientSize.Height - selectFolderButton.Height) / 2;
-            selectFolderButton.Location = new Point(x, y);
+            // Center the logo, settings group box, and select folder button vertically
+            int totalHeight = logoPictureBox.Height + 10 + settingsGroupBox.Height + 10 + selectFolderButton.Height;
+            int startY = (ClientSize.Height - totalHeight) / 2;
+
+            // Logo PictureBox
+            int x = (ClientSize.Width - logoPictureBox.Width) / 2;
+            logoPictureBox.Location = new Point(x, startY);
+
+            // Settings GroupBox
+            startY += logoPictureBox.Height + 10;
+            x = (ClientSize.Width - settingsGroupBox.Width) / 2;
+            settingsGroupBox.Location = new Point(x, startY);
+
+            // Select Folder Button
+            startY += settingsGroupBox.Height + 10;
+            x = (ClientSize.Width - selectFolderButton.Width) / 2;
+            selectFolderButton.Location = new Point(x, startY);
         }
 
         protected override void OnResize(EventArgs e)
@@ -295,7 +312,7 @@ namespace Picksy
             }
             else if (selectFolderButton.Visible)
             {
-                UpdateSelectFolderButtonPosition();
+                UpdateMainPageControlsPosition();
             }
         }
 
@@ -502,14 +519,21 @@ namespace Picksy
         {
             if (losers == null || losers.Count == 0)
             {
-                MessageBox.Show("No losing photos to display.", "Picksy");
                 MoveToNextBatch();
+                return;
+            }
+
+            if (skipConfirmationCheckBox.Checked)
+            {
+                MoveToDeleteFolder();
                 return;
             }
 
             // Hide tournament UI
             pictureBoxLeft.Image?.Dispose();
             pictureBoxRight.Image?.Dispose();
+            pictureBoxLeft.Image = null;
+            pictureBoxRight.Image = null;
             pictureBoxLeft.Visible = false;
             pictureBoxRight.Visible = false;
             rotateClockwiseButton.Visible = false;
@@ -683,7 +707,25 @@ namespace Picksy
                                 $"You just processed {batches?.Count ?? 0} batches, containing {totalBatchPhotos} photos, " +
                                 $"eliminating {deletedPhotosCount} of them and saving {sizeMessage}!\n\n" +
                                 $"When you are ready, erase the '_delete' folder to permanently remove those files";
-                MessageBox.Show(message, "Picksy");
+                using (var form = new Form
+                {
+                    Text = "Picksy",
+                    Size = new Size(400, 200),
+                    StartPosition = FormStartPosition.CenterParent,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false
+                })
+                {
+                    var label = new Label
+                    {
+                        Text = message,
+                        Dock = DockStyle.Fill,
+                        TextAlign = ContentAlignment.MiddleCenter
+                    };
+                    form.Controls.Add(label);
+                    form.ShowDialog(this);
+                }
             }
         }
 
@@ -697,6 +739,8 @@ namespace Picksy
             pictureBoxRight.Visible = false;
             remainingLabel.Text = "";
             selectFolderButton.Visible = true;
+            settingsGroupBox.Visible = true;
+            logoPictureBox.Visible = true;
             selectFolderButton.BringToFront();
             rotateClockwiseButton.Visible = false;
             rotateCounterclockwiseButton.Visible = false;
@@ -710,7 +754,7 @@ namespace Picksy
             history.Clear();
             // Preserve batches and currentFolderPath for next batch
             ClearThumbnails();
-            UpdateSelectFolderButtonPosition();
+            UpdateMainPageControlsPosition();
         }
     }
 }
