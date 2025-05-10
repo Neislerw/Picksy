@@ -293,13 +293,19 @@ namespace Picksy
         {
             if (remainingPhotos == null || remainingPhotos.Count == 0)
             {
-                MessageBox.Show("Tournament ended. No photos left.", "Picksy");
+                if (!skipConfirmationCheckBox.Checked)
+                {
+                    MessageBox.Show("Tournament ended. No photos left.", "Picksy");
+                }
                 ShowResults();
                 return;
             }
             if (remainingPhotos.Count == 1)
             {
-                MessageBox.Show($"Tournament ended. Winner: {Path.GetFileName(remainingPhotos[0])}", "Picksy");
+                if (!skipConfirmationCheckBox.Checked)
+                {
+                    MessageBox.Show($"Tournament ended. Winner: {Path.GetFileName(remainingPhotos[0])}", "Picksy");
+                }
                 ShowResults();
                 return;
             }
@@ -667,7 +673,10 @@ namespace Picksy
             if (remainingPhotos == null) return;
 
             // End tournament, keep all remaining photos
-            MessageBox.Show($"Tournament ended. Keeping {remainingPhotos.Count} remaining photos.", "Picksy");
+            if (!skipConfirmationCheckBox.Checked)
+            {
+                MessageBox.Show($"Tournament ended. Keeping {remainingPhotos.Count} remaining photos.", "Picksy");
+            }
             ShowResults();
         }
 
