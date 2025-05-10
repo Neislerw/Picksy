@@ -22,24 +22,21 @@ namespace Picksy
         private string? currentFolderPath;
         private int currentBatchIndex;
         private Stack<(string? Loser, bool KeptBoth)> history;
-        private Dictionary<string, int> photoRotations; // Track rotation angle (degrees) per photo
-        private bool showFullResolution = false; // Track full-resolution toggle
-        private int initialFileCount = 0; // Total files in folder at start
-        private int totalBatchPhotos = 0; // Total photos in all batches
-        private int deletedPhotosCount = 0; // Total photos moved to _delete
-        private bool isLoadingSession = false; // Flag to indicate session loading
+        private Dictionary<string, int> photoRotations;
+        private bool showFullResolution = false;
+        private int initialFileCount = 0;
+        private int totalBatchPhotos = 0;
+        private int deletedPhotosCount = 0;
+        private bool isLoadingSession = false;
 
         public MainForm()
         {
             InitializeComponent();
             history = new Stack<(string? Loser, bool KeptBoth)>();
             photoRotations = new Dictionary<string, int>();
-            // Initialize Batch Selection Method ComboBox
             batchSelectionMethodComboBox.Items.AddRange(new[] { "By Name", "By Date Created", "By Date Modified" });
-            batchSelectionMethodComboBox.SelectedIndex = 0; // Default to "By Name"
-            // Set default batch timing to 300 seconds
+            batchSelectionMethodComboBox.SelectedIndex = 0;
             batchTimingNumericUpDown.Value = 300;
-            // Ensure initial UI state is clean
             pictureBoxLeft.Visible = false;
             pictureBoxRight.Visible = false;
             rotateClockwiseButton.Visible = false;
@@ -49,10 +46,12 @@ namespace Picksy
             deletePromptLabel.Visible = false;
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
-            selectFolderButton.Visible = true;
+            selectLocalFolderButton.Visible = true;
+            selectPhoneFolderButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
-            selectFolderButton.BringToFront(); // Ensure button is on top
+            selectLocalFolderButton.BringToFront();
+            selectPhoneFolderButton.BringToFront();
             try
             {
                 this.Icon = new Icon("Resources\\logo.ico");
@@ -65,7 +64,7 @@ namespace Picksy
             UpdateMainPageControlsPosition();
         }
 
-        private void SelectFolderButton_Click(object sender, EventArgs e)
+        private void SelectLocalFolderButton_Click(object sender, EventArgs e)
         {
             int batchSizeMinimum = (int)batchSizeNumericUpDown.Value;
             int batchTimingMaximum = (int)batchTimingNumericUpDown.Value;
@@ -90,7 +89,7 @@ namespace Picksy
 
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "Select a folder containing photos";
+                dialog.Description = "Select a local folder containing photos";
                 dialog.ShowNewFolderButton = false;
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
@@ -102,25 +101,21 @@ namespace Picksy
                             throw new InvalidOperationException($"Invalid or inaccessible folder selected. Path: {currentFolderPath}");
                         }
 
-                        // Check for picksy_state.json in the selected folder
                         string stateFilePath = Path.Combine(currentFolderPath, "picksy_state.json");
                         if (File.Exists(stateFilePath))
                         {
                             bool loadState = PromptLoadSavedState(stateFilePath, out var savedSettings);
                             if (loadState && savedSettings.HasValue)
                             {
-                                // Update UI settings to match saved state
                                 batchSizeNumericUpDown.Value = savedSettings.Value.BatchSizeMinimum;
                                 batchTimingNumericUpDown.Value = savedSettings.Value.BatchTimingMaximum;
                                 includeSubfoldersCheckBox.Checked = savedSettings.Value.IncludeSubfolders;
                                 batchSelectionMethodComboBox.SelectedItem = savedSettings.Value.BatchSelectionMethod;
-                                // Load the saved state
                                 LoadSession(stateFilePath, savedSettings.Value);
                                 return;
                             }
                         }
 
-                        // Proceed with new session using current settings
                         var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
                         var searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
                         initialFileCount = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
@@ -157,6 +152,14 @@ namespace Picksy
             }
         }
 
+        private void SelectPhoneFolderButton_Click(object sender, EventArgs e)
+        {
+            using (var mtpForm = new MTPDeviceForm())
+            {
+                mtpForm.ShowDialog(this);
+            }
+        }
+
         private bool PromptLoadSavedState(string stateFilePath, out (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod)? savedSettings)
         {
             savedSettings = null;
@@ -167,7 +170,6 @@ namespace Picksy
                 var state = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)
                     ?? throw new InvalidOperationException("Failed to deserialize saved session.");
 
-                // Extract settings from saved state
                 if (!state.TryGetValue("CurrentFolderPath", out var folderPath) || folderPath.GetString() == null)
                 {
                     throw new InvalidOperationException("Missing CurrentFolderPath in saved session.");
@@ -177,7 +179,6 @@ namespace Picksy
                 bool includeSubfolders = state.TryGetValue("IncludeSubfolders", out var subfoldersElement) && subfoldersElement.ValueKind == JsonValueKind.True ? true : false;
                 string batchSelectionMethod = state.TryGetValue("BatchSelectionMethod", out var methodElement) && methodElement.GetString() != null ? methodElement.GetString()! : batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "By Name";
 
-                // Check if session is completed (no batches remain)
                 if (state.TryGetValue("Batches", out var batchesElement) && batchesElement.Deserialize<List<List<string>>>() is List<List<string>> savedBatches)
                 {
                     int currentBatchIndex = state.TryGetValue("CurrentBatchIndex", out var batchIndexElement) && batchIndexElement.TryGetInt32(out int batchIndex) ? batchIndex : 0;
@@ -186,7 +187,6 @@ namespace Picksy
 
                 savedSettings = (batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchSelectionMethod);
 
-                // Create dialog to prompt user
                 string statusMessage = isSessionCompleted ? "Session completed, but new photos can be processed." : "Session in progress.";
                 string message = $"A saved Picksy session was found in the selected folder.\n\n" +
                                 $"Status: {statusMessage}\n\n" +
@@ -214,162 +214,164 @@ namespace Picksy
             }
         }
 
-        private void LoadSession(string stateFilePath, (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod) savedSettings)
+        // Replace only the LoadSession method in MainForm.cs; keep the rest unchanged
+private void LoadSession(string stateFilePath, (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod) savedSettings)
+{
+    try
+    {
+        string json = File.ReadAllText(stateFilePath);
+        var state = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) 
+            ?? throw new InvalidOperationException("Failed to deserialize saved session.");
+
+        currentFolderPath = state.TryGetValue("CurrentFolderPath", out var folderPath) 
+            ? folderPath.GetString() 
+            : throw new InvalidOperationException("Missing CurrentFolderPath in saved session.");
+        if (string.IsNullOrEmpty(currentFolderPath) || !Directory.Exists(currentFolderPath))
         {
-            try
+            throw new InvalidOperationException("Saved folder path is invalid or inaccessible.");
+        }
+
+        batches = state.TryGetValue("Batches", out var batchesElement)
+            ? batchesElement.Deserialize<List<List<string>>>()
+            : null;
+        currentBatchIndex = state.TryGetValue("CurrentBatchIndex", out var batchIndexElement) && batchIndexElement.TryGetInt32(out int batchIndex)
+            ? batchIndex
+            : 0;
+        currentBatch = state.TryGetValue("CurrentBatch", out var currentBatchElement)
+            ? currentBatchElement.Deserialize<List<string>>()
+            : null;
+        currentPairIndex = state.TryGetValue("CurrentPairIndex", out var pairIndexElement) && pairIndexElement.TryGetInt32(out int pairIndex)
+            ? pairIndex
+            : 0;
+        remainingPhotos = state.TryGetValue("RemainingPhotos", out var remainingPhotosElement)
+            ? remainingPhotosElement.Deserialize<List<string>>()
+            : null;
+        losers = state.TryGetValue("Losers", out var losersElement)
+            ? losersElement.Deserialize<List<string>>()
+            : null;
+        photoRotations = state.TryGetValue("PhotoRotations", out var rotationsElement)
+            ? rotationsElement.Deserialize<Dictionary<string, int>>() ?? new Dictionary<string, int>()
+            : new Dictionary<string, int>();
+        totalBatchPhotos = state.TryGetValue("TotalBatchPhotos", out var totalPhotosElement) && totalPhotosElement.TryGetInt32(out int totalPhotos)
+            ? totalPhotos
+            : 0;
+        deletedPhotosCount = state.TryGetValue("DeletedPhotosCount", out var deletedCountElement) && deletedCountElement.TryGetInt32(out int deletedCount)
+            ? deletedCount
+            : 0;
+        initialFileCount = state.TryGetValue("InitialFileCount", out var initialCountElement) && initialCountElement.TryGetInt32(out int initialCount)
+            ? initialCount
+            : 0;
+
+        bool isSessionCompleted = batches == null || currentBatch == null || remainingPhotos == null || losers == null || currentBatchIndex + 1 >= batches.Count;
+        if (isSessionCompleted)
+        {
+            batches = new List<List<string>>();
+            currentBatch = new List<string>();
+            remainingPhotos = new List<string>();
+            losers = new List<string>();
+            currentBatchIndex = 0;
+            currentPairIndex = 0;
+        }
+        else
+        {
+            string deleteFolder = Path.Combine(currentFolderPath, "_delete");
+            remainingPhotos = remainingPhotos != null
+                ? remainingPhotos.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList()
+                : new List<string>();
+            losers = losers != null
+                ? losers.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList()
+                : new List<string>();
+
+            if (batches != null && batches.Any(batch => batch.Any(f => !File.Exists(f) || f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))))
             {
-                string json = File.ReadAllText(stateFilePath);
-                var state = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) 
-                    ?? throw new InvalidOperationException("Failed to deserialize saved session.");
-
-                // Restore state with null checks and default values
-                currentFolderPath = state.TryGetValue("CurrentFolderPath", out var folderPath) 
-                    ? folderPath.GetString() 
-                    : throw new InvalidOperationException("Missing CurrentFolderPath in saved session.");
-                if (string.IsNullOrEmpty(currentFolderPath) || !Directory.Exists(currentFolderPath))
+                batches = batches.Where(batch => batch.All(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))).ToList();
+                currentBatchIndex = Math.Min(currentBatchIndex, batches.Count - 1);
+                if (currentBatchIndex < 0) currentBatchIndex = 0;
+                if (batches.Count > 0)
                 {
-                    throw new InvalidOperationException("Saved folder path is invalid or inaccessible.");
+                    currentBatch = new List<string>(batches[currentBatchIndex]);
+                    remainingPhotos = new List<string>(currentBatch);
                 }
-
-                batches = state.TryGetValue("Batches", out var batchesElement)
-                    ? batchesElement.Deserialize<List<List<string>>>()
-                    : null;
-                currentBatchIndex = state.TryGetValue("CurrentBatchIndex", out var batchIndexElement) && batchIndexElement.TryGetInt32(out int batchIndex)
-                    ? batchIndex
-                    : 0;
-                currentBatch = state.TryGetValue("CurrentBatch", out var currentBatchElement)
-                    ? currentBatchElement.Deserialize<List<string>>()
-                    : null;
-                currentPairIndex = state.TryGetValue("CurrentPairIndex", out var pairIndexElement) && pairIndexElement.TryGetInt32(out int pairIndex)
-                    ? pairIndex
-                    : 0;
-                remainingPhotos = state.TryGetValue("RemainingPhotos", out var remainingPhotosElement)
-                    ? remainingPhotosElement.Deserialize<List<string>>()
-                    : null;
-                losers = state.TryGetValue("Losers", out var losersElement)
-                    ? losersElement.Deserialize<List<string>>()
-                    : null;
-                photoRotations = state.TryGetValue("PhotoRotations", out var rotationsElement)
-                    ? rotationsElement.Deserialize<Dictionary<string, int>>() ?? new Dictionary<string, int>()
-                    : new Dictionary<string, int>();
-                totalBatchPhotos = state.TryGetValue("TotalBatchPhotos", out var totalPhotosElement) && totalPhotosElement.TryGetInt32(out int totalPhotos)
-                    ? totalPhotos
-                    : 0;
-                deletedPhotosCount = state.TryGetValue("DeletedPhotosCount", out var deletedCountElement) && deletedCountElement.TryGetInt32(out int deletedCount)
-                    ? deletedCount
-                    : 0;
-                initialFileCount = state.TryGetValue("InitialFileCount", out var initialCountElement) && initialCountElement.TryGetInt32(out int initialCount)
-                    ? initialCount
-                    : 0;
-
-                // If session is completed or invalid, initialize with new photos
-                bool isSessionCompleted = batches == null || currentBatch == null || remainingPhotos == null || losers == null || currentBatchIndex + 1 >= batches.Count;
-                if (isSessionCompleted)
+                else
                 {
-                    // Initialize empty lists for completed session
-                    batches = new List<List<string>>();
                     currentBatch = new List<string>();
                     remainingPhotos = new List<string>();
-                    losers = new List<string>();
                     currentBatchIndex = 0;
-                    currentPairIndex = 0;
-                }
-                else
-                {
-                    // Filter out deleted or missing files from RemainingPhotos and Losers
-                    string deleteFolder = Path.Combine(currentFolderPath, "_delete");
-                    remainingPhotos = remainingPhotos.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList();
-                    losers = losers.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList();
-
-                    // Validate in-progress batches
-                    if (batches.Any(batch => batch.Any(f => !File.Exists(f) || f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))))
-                    {
-                        // Filter out invalid batches
-                        batches = batches.Where(batch => batch.All(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))).ToList();
-                        currentBatchIndex = Math.Min(currentBatchIndex, batches.Count - 1);
-                        if (currentBatchIndex < 0) currentBatchIndex = 0;
-                        if (batches.Count > 0)
-                        {
-                            currentBatch = new List<string>(batches[currentBatchIndex]);
-                            remainingPhotos = new List<string>(currentBatch);
-                        }
-                        else
-                        {
-                            currentBatch = new List<string>();
-                            remainingPhotos = new List<string>();
-                            currentBatchIndex = 0;
-                        }
-                    }
-                }
-
-                // Scan for new photos not in RemainingPhotos or Losers
-                var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
-                var searchOption = savedSettings.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-                var allPhotos = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
-                    .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
-                    .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
-                    .ToList();
-                var processedPhotos = new HashSet<string>(remainingPhotos.Concat(losers));
-                var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
-
-                if (newPhotos.Count > 0)
-                {
-                    // Group new photos using saved settings
-                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, savedSettings.BatchSelectionMethod);
-                    var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos); // Pass newPhotos to avoid reprocessing
-                    if (batches == null || batches.Count == 0)
-                    {
-                        batches = newBatches;
-                        currentBatchIndex = 0;
-                    }
-                    else
-                    {
-                        batches.AddRange(newBatches);
-                    }
-                    totalBatchPhotos += newPhotos.Count;
-                    initialFileCount += newPhotos.Count;
-                }
-
-                // Start tournament if there are batches to process
-                if (batches != null && batches.Count > 0)
-                {
-                    isLoadingSession = true; // Set flag for session loading
-                    try
-                    {
-                        selectFolderButton.Visible = false;
-                        settingsGroupBox.Visible = false;
-                        logoPictureBox.Visible = false;
-                        StartTournament(batches[currentBatchIndex]);
-                    }
-                    finally
-                    {
-                        isLoadingSession = false; // Reset flag
-                    }
-                }
-                else
-                {
-                    MessageBox.Show("No new photos found to process.", "Picksy");
-                    ResetUI();
                 }
             }
-            catch (Exception ex)
+            else if (batches == null)
             {
-                MessageBox.Show($"Error loading session: {ex.Message}", "Picksy Error");
-                try
-                {
-                    File.WriteAllText("picksy_error.log", $"Error loading session: {ex}\nFile: {stateFilePath}\nTimestamp: {DateTime.Now}");
-                }
-                catch
-                {
-                    Console.WriteLine($"Error loading session: {ex}");
-                }
-                ResetUI();
+                batches = new List<List<string>>();
+                currentBatch = new List<string>();
+                remainingPhotos = new List<string>();
+                currentBatchIndex = 0;
             }
         }
 
+        var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
+        var searchOption = savedSettings.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var allPhotos = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
+            .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
+            .ToList();
+        var processedPhotos = new HashSet<string>(remainingPhotos.Concat(losers));
+        var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
+
+        if (newPhotos.Count > 0)
+        {
+            var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, savedSettings.BatchSelectionMethod);
+            var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
+            if (batches == null || batches.Count == 0)
+            {
+                batches = newBatches;
+                currentBatchIndex = 0;
+            }
+            else
+            {
+                batches.AddRange(newBatches);
+            }
+            totalBatchPhotos += newPhotos.Count;
+            initialFileCount += newPhotos.Count;
+        }
+
+        if (batches != null && batches.Count > 0)
+        {
+            isLoadingSession = true;
+            try
+            {
+                selectLocalFolderButton.Visible = false;
+                selectPhoneFolderButton.Visible = false;
+                settingsGroupBox.Visible = false;
+                logoPictureBox.Visible = false;
+                StartTournament(batches[currentBatchIndex]);
+            }
+            finally
+            {
+                isLoadingSession = false;
+            }
+        }
+        else
+        {
+            MessageBox.Show("No new photos found to process.", "Picksy");
+            ResetUI();
+        }
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($"Error loading session: {ex.Message}", "Picksy Error");
+        try
+        {
+            File.WriteAllText("picksy_error.log", $"Error loading session: {ex}\nFile: {stateFilePath}\nTimestamp: {DateTime.Now}");
+        }
+        catch
+        {
+            Console.WriteLine($"Error loading session: {ex}");
+        }
+        ResetUI();
+    }
+}
         private void StartTournament(List<string> batch)
         {
-            // Allow batches with at least 2 photos when loading a session (partially completed batch)
             int minimumBatchSize = isLoadingSession ? 2 : (int)batchSizeNumericUpDown.Value;
             if (batch == null || batch.Count < minimumBatchSize)
             {
@@ -379,29 +381,29 @@ namespace Picksy
             }
 
             currentBatch = new List<string>(batch);
-            if (remainingPhotos == null || remainingPhotos.Count == 0) // Only set if not loaded from state or empty
+            if (remainingPhotos == null || remainingPhotos.Count == 0)
             {
                 remainingPhotos = new List<string>(batch);
             }
-            if (losers == null) // Only set if not loaded from state
+            if (losers == null)
             {
                 losers = new List<string>();
             }
             history.Clear();
-            // Initialize rotations for all batch photos, preserving existing ones from state
             foreach (var photo in batch)
             {
                 if (!photoRotations.ContainsKey(photo))
                 {
-                    photoRotations[photo] = 0; // Initialize rotation to 0 degrees
+                    photoRotations[photo] = 0;
                 }
             }
             if (!isLoadingSession)
             {
-                totalBatchPhotos += batch.Count; // Track total photos in batches, only for new sessions
+                totalBatchPhotos += batch.Count;
             }
             showFullResolution = false;
-            selectFolderButton.Visible = false;
+            selectLocalFolderButton.Visible = false;
+            selectPhoneFolderButton.Visible = false;
             settingsGroupBox.Visible = false;
             logoPictureBox.Visible = false;
             thumbnailPanel.Visible = false;
@@ -438,12 +440,10 @@ namespace Picksy
             }
             if (currentPairIndex + 1 >= remainingPhotos.Count)
             {
-                // Shuffle remaining photos for next round
                 remainingPhotos = Shuffle(remainingPhotos);
                 currentPairIndex = 0;
             }
 
-            // Load two photos with rotation
             pictureBoxLeft.Image?.Dispose();
             pictureBoxRight.Image?.Dispose();
             pictureBoxLeft.Image = null;
@@ -463,11 +463,9 @@ namespace Picksy
                 }
                 else
                 {
-                    // Load thumbnails for performance
                     pictureBoxLeft.Image = CreateThumbnail(leftImage, leftRotation);
                     pictureBoxRight.Image = CreateThumbnail(rightImage, rightRotation);
                 }
-                // Set tooltips with filenames
                 toolTipLeft.SetToolTip(pictureBoxLeft, Path.GetFileName(remainingPhotos[currentPairIndex]));
                 toolTipRight.SetToolTip(pictureBoxRight, Path.GetFileName(remainingPhotos[currentPairIndex + 1]));
             }
@@ -483,11 +481,9 @@ namespace Picksy
             }
             finally
             {
-                // Dispose original images after use
                 leftImage?.Dispose();
                 rightImage?.Dispose();
             }
-            // Update remaining photos and batches display
             int batchesRemaining = (batches != null && batches.Count > currentBatchIndex) ? batches.Count - currentBatchIndex - 1 : 0;
             remainingLabel.Text = $"Photos remaining: {remainingPhotos.Count} | Batches remaining: {batchesRemaining}";
             UpdatePictureBoxSizes();
@@ -495,7 +491,6 @@ namespace Picksy
 
         private Image CreateThumbnail(Image image, int rotation)
         {
-            // Create a thumbnail scaled to fit within 400x400, preserving aspect ratio
             int maxSize = 400;
             float ratio = Math.Min((float)maxSize / image.Width, (float)maxSize / image.Height);
             int newWidth = (int)(image.Width * ratio);
@@ -520,8 +515,7 @@ namespace Picksy
 
         private Image RotateImage(Image image, int angle)
         {
-            if (angle == 0) return new Bitmap(image); // Return a copy to ensure disposal
-            // Calculate new size for rotated image
+            if (angle == 0) return new Bitmap(image);
             double radians = Math.Abs(angle * Math.PI / 180);
             double sin = Math.Sin(radians);
             double cos = Math.Cos(radians);
@@ -549,11 +543,8 @@ namespace Picksy
 
         private void UpdatePictureBoxSizes()
         {
-            // Calculate available space, accounting for menu strip, buttons, and labels
             int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - 40;
-            int availableWidth = (ClientSize.Width - 30) / 2; // Split for two images with padding
-
-            // Set PictureBox size to fit images without cropping
+            int availableWidth = (ClientSize.Width - 30) / 2;
             pictureBoxLeft.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxRight.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxLeft.Size = new Size(availableWidth, availableHeight);
@@ -571,23 +562,19 @@ namespace Picksy
 
         private void UpdateMainPageControlsPosition()
         {
-            // Center the logo, settings group box, and select folder button vertically
-            int totalHeight = logoPictureBox.Height + 10 + settingsGroupBox.Height + 10 + selectFolderButton.Height;
+            int totalHeight = logoPictureBox.Height + 10 + settingsGroupBox.Height + 10 + selectLocalFolderButton.Height + 10 + selectPhoneFolderButton.Height;
             int startY = (ClientSize.Height - totalHeight) / 2;
-
-            // Logo PictureBox
             int x = (ClientSize.Width - logoPictureBox.Width) / 2;
             logoPictureBox.Location = new Point(x, startY);
-
-            // Settings GroupBox
             startY += logoPictureBox.Height + 10;
             x = (ClientSize.Width - settingsGroupBox.Width) / 2;
             settingsGroupBox.Location = new Point(x, startY);
-
-            // Select Folder Button
             startY += settingsGroupBox.Height + 10;
-            x = (ClientSize.Width - selectFolderButton.Width) / 2;
-            selectFolderButton.Location = new Point(x, startY);
+            x = (ClientSize.Width - selectLocalFolderButton.Width) / 2;
+            selectLocalFolderButton.Location = new Point(x, startY);
+            startY += selectLocalFolderButton.Height + 10;
+            x = (ClientSize.Width - selectPhoneFolderButton.Width) / 2;
+            selectPhoneFolderButton.Location = new Point(x, startY);
         }
 
         protected override void OnResize(EventArgs e)
@@ -597,7 +584,7 @@ namespace Picksy
             {
                 UpdatePictureBoxSizes();
             }
-            else if (selectFolderButton.Visible)
+            else if (selectLocalFolderButton.Visible)
             {
                 UpdateMainPageControlsPosition();
             }
@@ -773,8 +760,6 @@ namespace Picksy
         private void SelectPhoto(bool leftSelected)
         {
             if (remainingPhotos == null) return;
-
-            // Keep the winner, add loser to losers list
             int winnerIndex = leftSelected ? currentPairIndex : currentPairIndex + 1;
             int loserIndex = leftSelected ? currentPairIndex + 1 : currentPairIndex;
             string loser = remainingPhotos[loserIndex];
@@ -786,16 +771,12 @@ namespace Picksy
             }
             history.Push((loser, false));
             currentPairIndex = winnerIndex;
-
-            // Advance to next pair
             UpdateTournamentUI();
         }
 
         private void KeepBothPhotos()
         {
             if (remainingPhotos == null) return;
-
-            // Keep both photos, advance to next pair
             history.Push((null, true));
             currentPairIndex += 2;
             UpdateTournamentUI();
@@ -804,8 +785,6 @@ namespace Picksy
         private void EndTournament()
         {
             if (remainingPhotos == null) return;
-
-            // End tournament, keep all remaining photos
             if (!skipConfirmationCheckBox.Checked)
             {
                 MessageBox.Show($"Tournament ended. Keeping {remainingPhotos.Count} remaining photos.", "Picksy");
@@ -824,7 +803,6 @@ namespace Picksy
             var lastAction = history.Pop();
             if (lastAction.KeptBoth)
             {
-                // Revert keeping both by moving back one pair
                 if (currentPairIndex >= 2)
                 {
                     currentPairIndex -= 2;
@@ -836,7 +814,6 @@ namespace Picksy
             }
             else if (lastAction.Loser != null)
             {
-                // Restore the loser
                 losers?.Remove(lastAction.Loser);
                 remainingPhotos.Insert(currentPairIndex + 1, lastAction.Loser);
             }
@@ -858,7 +835,6 @@ namespace Picksy
                 return;
             }
 
-            // Hide tournament UI
             pictureBoxLeft.Image?.Dispose();
             pictureBoxRight.Image?.Dispose();
             pictureBoxLeft.Image = null;
@@ -871,7 +847,6 @@ namespace Picksy
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
 
-            // Show thumbnails
             ClearThumbnails();
             foreach (var loser in losers)
             {
@@ -901,7 +876,6 @@ namespace Picksy
 
             try
             {
-                // Dispose current images to release file handles
                 pictureBoxLeft.Image?.Dispose();
                 pictureBoxRight.Image?.Dispose();
                 pictureBoxLeft.Image = null;
@@ -914,7 +888,6 @@ namespace Picksy
                 {
                     string fileName = Path.GetFileName(photo);
                     string destPath = Path.Combine(deleteFolder, fileName);
-                    // Handle duplicate filenames
                     int counter = 1;
                     while (File.Exists(destPath))
                     {
@@ -926,10 +899,7 @@ namespace Picksy
                     File.Move(photo, destPath);
                 }
 
-                // Track deleted photos
                 deletedPhotosCount += currentBatch.Count;
-
-                // Clear current batch and advance
                 currentBatch = null;
                 remainingPhotos = null;
                 losers = null;
@@ -947,9 +917,7 @@ namespace Picksy
 
             try
             {
-                // Dispose thumbnails to release file handles
                 ClearThumbnails();
-
                 string deleteFolder = Path.Combine(currentFolderPath, "_delete");
                 Directory.CreateDirectory(deleteFolder);
 
@@ -957,7 +925,6 @@ namespace Picksy
                 {
                     string fileName = Path.GetFileName(loser);
                     string destPath = Path.Combine(deleteFolder, fileName);
-                    // Handle duplicate filenames
                     int counter = 1;
                     while (File.Exists(destPath))
                     {
@@ -969,9 +936,7 @@ namespace Picksy
                     File.Move(loser, destPath);
                 }
 
-                // Track deleted photos
                 deletedPhotosCount += losers.Count;
-
                 MoveToNextBatch();
             }
             catch (Exception ex)
@@ -982,7 +947,6 @@ namespace Picksy
 
         private void CancelBatch()
         {
-            // Dispose thumbnails to release file handles
             ClearThumbnails();
             MoveToNextBatch();
         }
@@ -1000,7 +964,6 @@ namespace Picksy
             }
             else
             {
-                // Calculate size of _delete folder
                 double deleteFolderSizeMB = 0;
                 if (currentFolderPath != null)
                 {
@@ -1012,7 +975,7 @@ namespace Picksy
                         {
                             totalBytes += new FileInfo(file).Length;
                         }
-                        deleteFolderSizeMB = totalBytes / (1024.0 * 1024.0); // Convert bytes to MB
+                        deleteFolderSizeMB = totalBytes / (1024.0 * 1024.0);
                     }
                 }
                 string sizeMessage = deleteFolderSizeMB > 1024
@@ -1022,7 +985,6 @@ namespace Picksy
                                      $"You just processed {batches?.Count ?? 0} batches, containing {totalBatchPhotos} photos, " +
                                      $"eliminating {deletedPhotosCount} of them and saving {sizeMessage}!";
 
-                // Create custom dialog
                 using (var form = new Form
                 {
                     Text = "Picksy - Session Complete",
@@ -1033,7 +995,6 @@ namespace Picksy
                     MinimizeBox = false
                 })
                 {
-                    // Stats label
                     var statsLabel = new Label
                     {
                         Text = statsMessage,
@@ -1041,8 +1002,6 @@ namespace Picksy
                         Size = new Size(340, 100),
                         TextAlign = ContentAlignment.TopCenter
                     };
-
-                    // Thanks label
                     var thanksLabel = new Label
                     {
                         Text = "Thanks for Using Picksy!",
@@ -1051,8 +1010,6 @@ namespace Picksy
                         TextAlign = ContentAlignment.MiddleCenter,
                         Font = new Font("Microsoft Sans Serif", 10F, FontStyle.Bold)
                     };
-
-                    // Buttons
                     var coffeeButton = new Button
                     {
                         Text = "Support Picksy",
@@ -1070,7 +1027,6 @@ namespace Picksy
                             MessageBox.Show($"Error opening Support Picksy: {ex.Message}", "Picksy Error");
                         }
                     };
-
                     var shareButton = new Button
                     {
                         Text = "Share Picksy",
@@ -1091,7 +1047,6 @@ namespace Picksy
                             MessageBox.Show($"Error sharing to X: {ex.Message}", "Picksy Error");
                         }
                     };
-
                     var closeButton = new Button
                     {
                         Text = "Close",
@@ -1099,14 +1054,11 @@ namespace Picksy
                         Location = new Point(250, 170)
                     };
                     closeButton.Click += (s, e) => form.Close();
-
-                    // Add controls to form
                     form.Controls.Add(statsLabel);
                     form.Controls.Add(thanksLabel);
                     form.Controls.Add(coffeeButton);
                     form.Controls.Add(shareButton);
                     form.Controls.Add(closeButton);
-
                     form.ShowDialog(this);
                 }
             }
@@ -1121,10 +1073,12 @@ namespace Picksy
             pictureBoxLeft.Visible = false;
             pictureBoxRight.Visible = false;
             remainingLabel.Text = "";
-            selectFolderButton.Visible = true;
+            selectLocalFolderButton.Visible = true;
+            selectPhoneFolderButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
-            selectFolderButton.BringToFront();
+            selectLocalFolderButton.BringToFront();
+            selectPhoneFolderButton.BringToFront();
             rotateClockwiseButton.Visible = false;
             rotateCounterclockwiseButton.Visible = false;
             saveAndQuitButton.Visible = false;
@@ -1136,7 +1090,6 @@ namespace Picksy
             remainingPhotos = null;
             losers = null;
             history.Clear();
-            // Preserve batches and currentFolderPath for next batch
             ClearThumbnails();
             UpdateMainPageControlsPosition();
         }
@@ -1152,7 +1105,6 @@ namespace Picksy
                 }
             }
             thumbnailPanel.Controls.Clear();
-            // Reset visibility
             deletePromptLabel.Visible = false;
         }
     }
