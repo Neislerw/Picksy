@@ -54,6 +54,7 @@
             this.logoPictureBox = new System.Windows.Forms.PictureBox();
             this.toolTipLeft = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipRight = new System.Windows.Forms.ToolTip(this.components);
+            this.saveAndQuitButton = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).BeginInit();
             this.thumbnailPanel.SuspendLayout();
@@ -307,10 +308,22 @@
             this.toolTipRight.InitialDelay = 500;
             this.toolTipRight.ReshowDelay = 100;
             // 
+            // saveAndQuitButton
+            // 
+            this.saveAndQuitButton.Location = new System.Drawing.Point(350, 444);
+            this.saveAndQuitButton.Name = "saveAndQuitButton";
+            this.saveAndQuitButton.Size = new System.Drawing.Size(100, 30);
+            this.saveAndQuitButton.TabIndex = 19;
+            this.saveAndQuitButton.Text = "Save and Quit";
+            this.saveAndQuitButton.UseVisualStyleBackColor = true;
+            this.saveAndQuitButton.Visible = false;
+            this.saveAndQuitButton.Click += new System.EventHandler(this.SaveAndQuitButton_Click);
+            // 
             // MainForm
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 600);
+            this.Controls.Add(this.saveAndQuitButton);
             this.Controls.Add(this.logoPictureBox);
             this.Controls.Add(this.settingsGroupBox);
             this.Controls.Add(this.deletePromptLabel);
@@ -366,5 +379,6 @@
         private System.Windows.Forms.Label batchSelectionMethodLabel;
         private System.Windows.Forms.ToolTip toolTipLeft;
         private System.Windows.Forms.ToolTip toolTipRight;
+        private System.Windows.Forms.Button saveAndQuitButton;
     }
 }
