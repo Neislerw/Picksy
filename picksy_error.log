@@ -1,4 +1,4 @@
-Error details: System.InvalidOperationException: Invalid or inaccessible folder selected. Path: E:\Downloads\Google Photos\Takeout\Google Photos\Photos from 2020\Select Folder.none
-   at Picksy.MainForm.SelectFolderButton_Click(Object sender, EventArgs e) in E:\Documents\Coding\Picksy\MainForm.cs:line 111
-Attempted path: E:\Downloads\Google Photos\Takeout\Google Photos\Photos from 2020\Select Folder.none
-Timestamp: 5/9/2025 2:33:56 PM
+Error loading session: System.InvalidOperationException: Some saved photos are missing or inaccessible.
+   at Picksy.MainForm.LoadSession(String stateFilePath, ValueTuple`4 savedSettings) in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 282
+File: C:\Users\Will\Documents\Coding\Picksy Photos\Select\picksy_state.json
+Timestamp: 5/10/2025 9:49:50 AM
