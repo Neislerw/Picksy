@@ -48,11 +48,9 @@ namespace Picksy
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
             selectFolderButton.Visible = true;
-            loadSessionButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
-            selectFolderButton.BringToFront(); // Ensure buttons are on top
-            loadSessionButton.BringToFront();
+            selectFolderButton.BringToFront(); // Ensure button is on top
             try
             {
                 this.Icon = new Icon("Resources\\logo.ico");
@@ -102,7 +100,25 @@ namespace Picksy
                             throw new InvalidOperationException($"Invalid or inaccessible folder selected. Path: {currentFolderPath}");
                         }
 
-                        // Count initial image files
+                        // Check for picksy_state.json in the selected folder
+                        string stateFilePath = Path.Combine(currentFolderPath, "picksy_state.json");
+                        if (File.Exists(stateFilePath))
+                        {
+                            bool loadState = PromptLoadSavedState(stateFilePath, out var savedSettings);
+                            if (loadState && savedSettings.HasValue)
+                            {
+                                // Update UI settings to match saved state
+                                batchSizeNumericUpDown.Value = savedSettings.Value.BatchSizeMinimum;
+                                batchTimingNumericUpDown.Value = savedSettings.Value.BatchTimingMaximum;
+                                includeSubfoldersCheckBox.Checked = savedSettings.Value.IncludeSubfolders;
+                                batchSelectionMethodComboBox.SelectedItem = savedSettings.Value.BatchSelectionMethod;
+                                // Load the saved state
+                                LoadSession(stateFilePath);
+                                return;
+                            }
+                        }
+
+                        // Proceed with new session using current settings
                         var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
                         var searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
                         initialFileCount = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
@@ -139,17 +155,58 @@ namespace Picksy
             }
         }
 
-        private void LoadSessionButton_Click(object sender, EventArgs e)
+        private bool PromptLoadSavedState(string stateFilePath, out (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod)? savedSettings)
         {
-            if (!File.Exists("picksy_state.json"))
-            {
-                MessageBox.Show("No saved session found at picksy_state.json.", "Picksy");
-                return;
-            }
-
+            savedSettings = null;
             try
             {
-                string json = File.ReadAllText("picksy_state.json");
+                string json = File.ReadAllText(stateFilePath);
+                var state = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)
+                    ?? throw new InvalidOperationException("Failed to deserialize saved session.");
+
+                // Extract settings from saved state
+                if (!state.TryGetValue("CurrentFolderPath", out var folderPath) || folderPath.GetString() == null)
+                {
+                    throw new InvalidOperationException("Missing CurrentFolderPath in saved session.");
+                }
+                int batchSizeMinimum = state.TryGetValue("BatchSizeMinimum", out var sizeElement) && sizeElement.TryGetInt32(out int size) ? size : (int)batchSizeNumericUpDown.Value;
+                int batchTimingMaximum = state.TryGetValue("BatchTimingMaximum", out var timingElement) && timingElement.TryGetInt32(out int timing) ? timing : (int)batchTimingNumericUpDown.Value;
+                bool includeSubfolders = state.TryGetValue("IncludeSubfolders", out var subfoldersElement) && subfoldersElement.ValueKind == JsonValueKind.True ? true : false;
+                string batchSelectionMethod = state.TryGetValue("BatchSelectionMethod", out var methodElement) && methodElement.GetString() != null ? methodElement.GetString()! : batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "By Name";
+
+                savedSettings = (batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchSelectionMethod);
+
+                // Create dialog to prompt user
+                string message = $"A saved Picksy session was found in the selected folder.\n\n" +
+                                $"Saved Settings:\n" +
+                                $"- Batch Size Minimum: {savedSettings.Value.BatchSizeMinimum}\n" +
+                                $"- Batch Timing Maximum: {savedSettings.Value.BatchTimingMaximum} seconds\n" +
+                                $"- Include Subfolders: {(savedSettings.Value.IncludeSubfolders ? "Yes" : "No")}\n" +
+                                $"- Batch Selection Method: {savedSettings.Value.BatchSelectionMethod}\n\n" +
+                                $"Would you like to load this session? Click 'Yes' to load, or 'No' to start a new session with current settings.";
+                var result = MessageBox.Show(message, "Load Saved Session?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                return result == DialogResult.Yes;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error reading saved session: {ex.Message}. Starting a new session.", "Picksy Error");
+                try
+                {
+                    File.WriteAllText("picksy_error.log", $"Error reading saved session: {ex}\nFile: {stateFilePath}\nTimestamp: {DateTime.Now}");
+                }
+                catch
+                {
+                    Console.WriteLine($"Error reading saved session: {ex}");
+                }
+                return false;
+            }
+        }
+
+        private void LoadSession(string stateFilePath)
+        {
+            try
+            {
+                string json = File.ReadAllText(stateFilePath);
                 var state = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) 
                     ?? throw new InvalidOperationException("Failed to deserialize saved session.");
 
@@ -215,7 +272,6 @@ namespace Picksy
                 try
                 {
                     selectFolderButton.Visible = false;
-                    loadSessionButton.Visible = false;
                     settingsGroupBox.Visible = false;
                     logoPictureBox.Visible = false;
                     StartTournament(currentBatch);
@@ -230,7 +286,7 @@ namespace Picksy
                 MessageBox.Show($"Error loading session: {ex.Message}", "Picksy Error");
                 try
                 {
-                    File.WriteAllText("picksy_error.log", $"Error loading session: {ex}\nTimestamp: {DateTime.Now}");
+                    File.WriteAllText("picksy_error.log", $"Error loading session: {ex}\nFile: {stateFilePath}\nTimestamp: {DateTime.Now}");
                 }
                 catch
                 {
@@ -274,7 +330,6 @@ namespace Picksy
             }
             showFullResolution = false;
             selectFolderButton.Visible = false;
-            loadSessionButton.Visible = false;
             settingsGroupBox.Visible = false;
             logoPictureBox.Visible = false;
             thumbnailPanel.Visible = false;
@@ -444,8 +499,8 @@ namespace Picksy
 
         private void UpdateMainPageControlsPosition()
         {
-            // Center the logo, settings group box, and buttons vertically
-            int totalHeight = logoPictureBox.Height + 10 + settingsGroupBox.Height + 10 + selectFolderButton.Height + 10 + loadSessionButton.Height;
+            // Center the logo, settings group box, and select folder button vertically
+            int totalHeight = logoPictureBox.Height + 10 + settingsGroupBox.Height + 10 + selectFolderButton.Height;
             int startY = (ClientSize.Height - totalHeight) / 2;
 
             // Logo PictureBox
@@ -461,11 +516,6 @@ namespace Picksy
             startY += settingsGroupBox.Height + 10;
             x = (ClientSize.Width - selectFolderButton.Width) / 2;
             selectFolderButton.Location = new Point(x, startY);
-
-            // Load Session Button
-            startY += selectFolderButton.Height + 10;
-            x = (ClientSize.Width - loadSessionButton.Width) / 2;
-            loadSessionButton.Location = new Point(x, startY);
         }
 
         protected override void OnResize(EventArgs e)
@@ -529,6 +579,12 @@ namespace Picksy
 
         private void SaveAndQuitButton_Click(object sender, EventArgs e)
         {
+            if (currentFolderPath == null)
+            {
+                MessageBox.Show("No folder selected. Cannot save state.", "Picksy Error");
+                return;
+            }
+
             try
             {
                 var state = new
@@ -543,10 +599,15 @@ namespace Picksy
                     PhotoRotations = photoRotations,
                     TotalBatchPhotos = totalBatchPhotos,
                     DeletedPhotosCount = deletedPhotosCount,
-                    InitialFileCount = initialFileCount
+                    InitialFileCount = initialFileCount,
+                    BatchSizeMinimum = (int)batchSizeNumericUpDown.Value,
+                    BatchTimingMaximum = (int)batchTimingNumericUpDown.Value,
+                    IncludeSubfolders = includeSubfoldersCheckBox.Checked,
+                    BatchSelectionMethod = batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "By Name"
                 };
-                File.WriteAllText("picksy_state.json", JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
-                MessageBox.Show("State saved to picksy_state.json. Exiting.", "Picksy");
+                string stateFilePath = Path.Combine(currentFolderPath, "picksy_state.json");
+                File.WriteAllText(stateFilePath, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
+                MessageBox.Show($"State saved to {stateFilePath}. Exiting.", "Picksy");
                 Application.Exit();
             }
             catch (Exception ex)
@@ -921,11 +982,9 @@ namespace Picksy
             pictureBoxRight.Visible = false;
             remainingLabel.Text = "";
             selectFolderButton.Visible = true;
-            loadSessionButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
             selectFolderButton.BringToFront();
-            loadSessionButton.BringToFront();
             rotateClockwiseButton.Visible = false;
             rotateCounterclockwiseButton.Visible = false;
             saveAndQuitButton.Visible = false;

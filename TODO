@@ -10,3 +10,7 @@
 - ~~ Additional batch selection methods(by date created, manual thumbnail selection, by filename)
 - Make Portable, (ie can be run from a flashdrive)
 - Allow access to phone folders via MTP
+
+
+- Bugs:
+    - Can't Rotate CCW
