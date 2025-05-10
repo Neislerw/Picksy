@@ -2,272 +2,183 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using MetadataExtractor; // For EXIF data
-using MetadataExtractor.Formats.Exif;
+using MetadataExtractor;
 
 namespace Picksy
 {
     public class PhotoGrouper
     {
-        private readonly int batchSizeMinimum;
-        private readonly int batchTimingMaximum;
-        private readonly bool includeSubfolders;
-        private readonly string batchSelectionMethod;
+        private readonly int _batchSizeMinimum;
+        private readonly int _batchTimingMaximum;
+        private readonly bool _includeSubfolders;
+        private readonly string _batchSelectionMethod;
 
         public PhotoGrouper(int batchSizeMinimum, int batchTimingMaximum, bool includeSubfolders, string batchSelectionMethod)
         {
-            this.batchSizeMinimum = batchSizeMinimum;
-            this.batchTimingMaximum = batchTimingMaximum;
-            this.includeSubfolders = includeSubfolders;
-            this.batchSelectionMethod = batchSelectionMethod;
+            _batchSizeMinimum = batchSizeMinimum;
+            _batchTimingMaximum = batchTimingMaximum;
+            _includeSubfolders = includeSubfolders;
+            _batchSelectionMethod = batchSelectionMethod;
         }
 
-        public List<List<string>> GroupPhotos(string folderPath)
-        {
-            var batches = new List<List<string>>();
-            var photoFiles = GetPhotoFiles(folderPath);
-            if (photoFiles.Count < batchSizeMinimum)
-            {
-                return batches;
-            }
-
-            try
-            {
-                switch (batchSelectionMethod)
-                {
-                    case "By Name":
-                        batches = GroupByName(photoFiles);
-                        break;
-                    case "By Date Created":
-                        batches = GroupByDateCreated(photoFiles);
-                        break;
-                    case "By Date Modified":
-                        batches = GroupByDateModified(photoFiles);
-                        break;
-                    default:
-                        throw new ArgumentException($"Unknown batch selection method: {batchSelectionMethod}");
-                }
-
-                // Log batch details for debugging
-                LogBatches(batches);
-            }
-            catch (Exception ex)
-            {
-                File.WriteAllText("picksy_grouper.log", $"Error grouping photos: {ex}\nFolder: {folderPath}\nTimestamp: {DateTime.Now}");
-                return batches;
-            }
-
-            return batches.Where(b => b.Count >= batchSizeMinimum).ToList();
-        }
-
-        private List<string> GetPhotoFiles(string folderPath)
-        {
-            var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
-            var searchOption = includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            return System.IO.Directory.GetFiles(folderPath, "*.*", searchOption)
-                .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
-                .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
-                .ToList();
-        }
-
-        private List<List<string>> GroupByName(List<string> photoFiles)
-        {
-            var batches = new List<List<string>>();
-            var sortedFiles = photoFiles.OrderBy(f => GetPhotoTimestamp(f)).ToList();
-            var currentBatch = new List<string>();
-            string? lastPrefix = null;
-            DateTime? lastTime = null;
-
-            foreach (var file in sortedFiles)
-            {
-                string fileName = Path.GetFileNameWithoutExtension(file);
-                // Extract prefix (e.g., "IMG_001" -> "IMG")
-                string prefix = GetFilenamePrefix(fileName);
-                DateTime currentTime = GetPhotoTimestamp(file);
-
-                if (currentBatch.Count == 0)
-                {
-                    currentBatch.Add(file);
-                    lastPrefix = prefix;
-                    lastTime = currentTime;
-                    continue;
-                }
-
-                // Check if the file belongs to the current batch
-                bool samePrefix = prefix == lastPrefix;
-                bool withinTime = lastTime.HasValue && (currentTime - lastTime.Value).TotalSeconds <= batchTimingMaximum;
-
-                if (samePrefix && withinTime)
-                {
-                    currentBatch.Add(file);
-                }
-                else
-                {
-                    if (currentBatch.Count >= batchSizeMinimum)
-                    {
-                        batches.Add(currentBatch);
-                    }
-                    currentBatch = new List<string> { file };
-                    lastPrefix = prefix;
-                }
-                lastTime = currentTime;
-            }
-
-            if (currentBatch.Count >= batchSizeMinimum)
-            {
-                batches.Add(currentBatch);
-            }
-
-            return batches;
-        }
-
-        private List<List<string>> GroupByDateCreated(List<string> photoFiles)
-        {
-            var batches = new List<List<string>>();
-            var sortedFiles = photoFiles.OrderBy(f => File.GetCreationTime(f)).ToList();
-            var currentBatch = new List<string>();
-            DateTime? lastTime = null;
-
-            foreach (var file in sortedFiles)
-            {
-                DateTime currentTime = File.GetCreationTime(file);
-
-                if (currentBatch.Count == 0)
-                {
-                    currentBatch.Add(file);
-                    lastTime = currentTime;
-                    continue;
-                }
-
-                if (lastTime.HasValue && (currentTime - lastTime.Value).TotalSeconds <= batchTimingMaximum)
-                {
-                    currentBatch.Add(file);
-                }
-                else
-                {
-                    if (currentBatch.Count >= batchSizeMinimum)
-                    {
-                        batches.Add(currentBatch);
-                    }
-                    currentBatch = new List<string> { file };
-                }
-                lastTime = currentTime;
-            }
-
-            if (currentBatch.Count >= batchSizeMinimum)
-            {
-                batches.Add(currentBatch);
-            }
-
-            return batches;
-        }
-
-        private List<List<string>> GroupByDateModified(List<string> photoFiles)
-        {
-            var batches = new List<List<string>>();
-            var sortedFiles = photoFiles.OrderBy(f => File.GetLastWriteTime(f)).ToList();
-            var currentBatch = new List<string>();
-            DateTime? lastTime = null;
-
-            foreach (var file in sortedFiles)
-            {
-                DateTime currentTime = File.GetLastWriteTime(file);
-
-                if (currentBatch.Count == 0)
-                {
-                    currentBatch.Add(file);
-                    lastTime = currentTime;
-                    continue;
-                }
-
-                if (lastTime.HasValue && (currentTime - lastTime.Value).TotalSeconds <= batchTimingMaximum)
-                {
-                    currentBatch.Add(file);
-                }
-                else
-                {
-                    if (currentBatch.Count >= batchSizeMinimum)
-                    {
-                        batches.Add(currentBatch);
-                    }
-                    currentBatch = new List<string> { file };
-                }
-                lastTime = currentTime;
-            }
-
-            if (currentBatch.Count >= batchSizeMinimum)
-            {
-                batches.Add(currentBatch);
-            }
-
-            return batches;
-        }
-
-        private string GetFilenamePrefix(string fileName)
-        {
-            // Extract prefix up to the last underscore or number
-            int lastUnderscore = fileName.LastIndexOf('_');
-            if (lastUnderscore > 0)
-            {
-                return fileName.Substring(0, lastUnderscore);
-            }
-            // If no underscore, take non-numeric part
-            int firstDigit = fileName.IndexOfAny("0123456789".ToCharArray());
-            if (firstDigit > 0)
-            {
-                return fileName.Substring(0, firstDigit);
-            }
-            return fileName;
-        }
-
-        private DateTime GetPhotoTimestamp(string filePath)
+        public List<List<string>> GroupPhotos(string folderPath, List<string>? photos = null)
         {
             try
             {
-                var directories = ImageMetadataReader.ReadMetadata(filePath);
-                var subIfdDirectory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
-                if (subIfdDirectory != null)
-                {
-                    var dateTime = subIfdDirectory.GetDateTime(ExifDirectoryBase.TagDateTimeOriginal);
-                    return dateTime; // Non-nullable, exception if invalid
-                }
-            }
-            catch
-            {
-                // Fallback to file creation time if EXIF fails
-            }
-            return File.GetCreationTime(filePath);
-        }
+                var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
+                var searchOption = _includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
 
-        private void LogBatches(List<List<string>> batches)
-        {
-            try
-            {
-                using (var writer = new StreamWriter("picksy_grouper.log", false))
-                {
-                    writer.WriteLine($"Batch grouping log - Timestamp: {DateTime.Now}");
-                    writer.WriteLine($"Batch Selection Method: {batchSelectionMethod}");
-                    writer.WriteLine($"Batch Size Minimum: {batchSizeMinimum}");
-                    writer.WriteLine($"Batch Timing Maximum: {batchTimingMaximum} seconds");
-                    writer.WriteLine($"Include Subfolders: {includeSubfolders}");
-                    writer.WriteLine();
+                // Use provided photos or scan directory
+                var photoFiles = photos != null
+                    ? photos.Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower())).ToList()
+                    : System.IO.Directory.GetFiles(folderPath, "*.*", searchOption)
+                        .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                        .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
+                        .ToList();
 
-                    for (int i = 0; i < batches.Count; i++)
+                var photoTimestamps = new List<(string Path, DateTime Timestamp)>();
+                foreach (var photo in photoFiles)
+                {
+                    try
                     {
-                        writer.WriteLine($"Batch {i + 1} ({batches[i].Count} photos):");
-                        foreach (var file in batches[i])
+                        var directories = ImageMetadataReader.ReadMetadata(photo);
+                        DateTime? timestamp = null;
+                        foreach (var directory in directories)
                         {
-                            var timestamp = GetPhotoTimestamp(file);
-                            writer.WriteLine($"  {Path.GetFileName(file)} (Timestamp: {timestamp})");
+                            foreach (var tag in directory.Tags)
+                            {
+                                if (tag.Name.Contains("Date/Time Original") || tag.Name.Contains("Date/Time"))
+                                {
+                                    if (DateTime.TryParse(tag.Description, out var parsedDate))
+                                    {
+                                        timestamp = parsedDate;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (timestamp.HasValue) break;
                         }
-                        writer.WriteLine();
+                        timestamp ??= System.IO.File.GetLastWriteTime(photo);
+                        photoTimestamps.Add((photo, timestamp.Value));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error reading metadata for {photo}: {ex.Message}");
+                        photoTimestamps.Add((photo, System.IO.File.GetLastWriteTime(photo)));
                     }
                 }
+
+                var groupedPhotos = new List<List<string>>();
+                if (_batchSelectionMethod == "By Name")
+                {
+                    // Group by prefix, then split by timing threshold
+                    var prefixGroups = photoTimestamps
+                        .GroupBy(pt => GetFilenamePrefix(pt.Path))
+                        .Select(g => g.OrderBy(pt => pt.Timestamp).ToList())
+                        .ToList();
+
+                    foreach (var prefixGroup in prefixGroups)
+                    {
+                        var currentBatch = new List<string>();
+                        DateTime? lastTimestamp = null;
+
+                        foreach (var (path, timestamp) in prefixGroup)
+                        {
+                            if (lastTimestamp == null || (timestamp - lastTimestamp.Value).TotalSeconds <= _batchTimingMaximum)
+                            {
+                                currentBatch.Add(path);
+                            }
+                            else
+                            {
+                                if (currentBatch.Count >= _batchSizeMinimum)
+                                {
+                                    groupedPhotos.Add(currentBatch);
+                                }
+                                currentBatch = new List<string> { path };
+                            }
+                            lastTimestamp = timestamp;
+                        }
+
+                        if (currentBatch.Count >= _batchSizeMinimum)
+                        {
+                            groupedPhotos.Add(currentBatch);
+                        }
+                    }
+                }
+                else
+                {
+                    // Existing logic for other methods
+                    var sortedPhotos = _batchSelectionMethod == "By Date Created"
+                        ? photoTimestamps.OrderBy(pt => System.IO.File.GetCreationTime(pt.Path)).ToList()
+                        : photoTimestamps.OrderBy(pt => pt.Timestamp).ToList();
+
+                    var currentBatch = new List<string>();
+                    DateTime? lastTimestamp = null;
+
+                    foreach (var (path, timestamp) in sortedPhotos)
+                    {
+                        if (lastTimestamp == null || (timestamp - lastTimestamp.Value).TotalSeconds <= _batchTimingMaximum)
+                        {
+                            currentBatch.Add(path);
+                        }
+                        else
+                        {
+                            if (currentBatch.Count >= _batchSizeMinimum)
+                            {
+                                groupedPhotos.Add(currentBatch);
+                            }
+                            currentBatch = new List<string> { path };
+                        }
+                        lastTimestamp = timestamp;
+                    }
+
+                    if (currentBatch.Count >= _batchSizeMinimum)
+                    {
+                        groupedPhotos.Add(currentBatch);
+                    }
+                }
+
+                try
+                {
+                    File.WriteAllText("picksy_grouper.log", $"Grouped {photoTimestamps.Count} photos into {groupedPhotos.Count} batches at {DateTime.Now}\n" +
+                        $"Settings: BatchSizeMinimum={_batchSizeMinimum}, BatchTimingMaximum={_batchTimingMaximum}, IncludeSubfolders={_includeSubfolders}, Method={_batchSelectionMethod}\n" +
+                        string.Join("\n", groupedPhotos.Select((g, i) => $"Batch {i + 1}: {string.Join(", ", g.Select(Path.GetFileName))}")));
+                }
+                catch
+                {
+                    Console.WriteLine("Error writing to picksy_grouper.log");
+                }
+
+                return groupedPhotos;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error writing batch log: {ex}");
+                try
+                {
+                    File.WriteAllText("picksy_grouper_error.log", $"Error grouping photos: {ex}\nFolder: {folderPath}\nTimestamp: {DateTime.Now}");
+                }
+                catch
+                {
+                    Console.WriteLine($"Error grouping photos: {ex}\nFolder: {folderPath}");
+                }
+                return new List<List<string>>();
             }
+        }
+
+        private string GetFilenamePrefix(string path)
+        {
+            string fileName = Path.GetFileNameWithoutExtension(path);
+            // Assuming filename is a timestamp like "20241015_120000"
+            // Extract the date part (e.g., "20241015") as the prefix
+            if (fileName.Length >= 8 && fileName.Contains("_"))
+            {
+                int underscoreIndex = fileName.IndexOf('_');
+                if (underscoreIndex >= 8) // Ensure there's a date-like part before underscore
+                {
+                    return fileName.Substring(0, 8); // e.g., "20241015"
+                }
+            }
+            return fileName; // Fallback to full name if no valid timestamp format
         }
     }
 }

@@ -7,6 +7,8 @@ using System.IO;
 using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Text.Json;
+using System.Diagnostics;
+using System.Web;
 
 namespace Picksy
 {
@@ -113,7 +115,7 @@ namespace Picksy
                                 includeSubfoldersCheckBox.Checked = savedSettings.Value.IncludeSubfolders;
                                 batchSelectionMethodComboBox.SelectedItem = savedSettings.Value.BatchSelectionMethod;
                                 // Load the saved state
-                                LoadSession(stateFilePath);
+                                LoadSession(stateFilePath, savedSettings.Value);
                                 return;
                             }
                         }
@@ -158,6 +160,7 @@ namespace Picksy
         private bool PromptLoadSavedState(string stateFilePath, out (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod)? savedSettings)
         {
             savedSettings = null;
+            bool isSessionCompleted = false;
             try
             {
                 string json = File.ReadAllText(stateFilePath);
@@ -174,10 +177,19 @@ namespace Picksy
                 bool includeSubfolders = state.TryGetValue("IncludeSubfolders", out var subfoldersElement) && subfoldersElement.ValueKind == JsonValueKind.True ? true : false;
                 string batchSelectionMethod = state.TryGetValue("BatchSelectionMethod", out var methodElement) && methodElement.GetString() != null ? methodElement.GetString()! : batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "By Name";
 
+                // Check if session is completed (no batches remain)
+                if (state.TryGetValue("Batches", out var batchesElement) && batchesElement.Deserialize<List<List<string>>>() is List<List<string>> savedBatches)
+                {
+                    int currentBatchIndex = state.TryGetValue("CurrentBatchIndex", out var batchIndexElement) && batchIndexElement.TryGetInt32(out int batchIndex) ? batchIndex : 0;
+                    isSessionCompleted = savedBatches == null || currentBatchIndex + 1 >= savedBatches.Count;
+                }
+
                 savedSettings = (batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchSelectionMethod);
 
                 // Create dialog to prompt user
+                string statusMessage = isSessionCompleted ? "Session completed, but new photos can be processed." : "Session in progress.";
                 string message = $"A saved Picksy session was found in the selected folder.\n\n" +
+                                $"Status: {statusMessage}\n\n" +
                                 $"Saved Settings:\n" +
                                 $"- Batch Size Minimum: {savedSettings.Value.BatchSizeMinimum}\n" +
                                 $"- Batch Timing Maximum: {savedSettings.Value.BatchTimingMaximum} seconds\n" +
@@ -202,7 +214,7 @@ namespace Picksy
             }
         }
 
-        private void LoadSession(string stateFilePath)
+        private void LoadSession(string stateFilePath, (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod) savedSettings)
         {
             try
             {
@@ -221,64 +233,123 @@ namespace Picksy
 
                 batches = state.TryGetValue("Batches", out var batchesElement)
                     ? batchesElement.Deserialize<List<List<string>>>()
-                    : throw new InvalidOperationException("Missing Batches in saved session.");
-                
+                    : null;
                 currentBatchIndex = state.TryGetValue("CurrentBatchIndex", out var batchIndexElement) && batchIndexElement.TryGetInt32(out int batchIndex)
                     ? batchIndex
-                    : throw new InvalidOperationException("Invalid or missing CurrentBatchIndex in saved session.");
-                
+                    : 0;
                 currentBatch = state.TryGetValue("CurrentBatch", out var currentBatchElement)
                     ? currentBatchElement.Deserialize<List<string>>()
-                    : throw new InvalidOperationException("Missing CurrentBatch in saved session.");
-                
+                    : null;
                 currentPairIndex = state.TryGetValue("CurrentPairIndex", out var pairIndexElement) && pairIndexElement.TryGetInt32(out int pairIndex)
                     ? pairIndex
-                    : throw new InvalidOperationException("Invalid or missing CurrentPairIndex in saved session.");
-                
+                    : 0;
                 remainingPhotos = state.TryGetValue("RemainingPhotos", out var remainingPhotosElement)
                     ? remainingPhotosElement.Deserialize<List<string>>()
-                    : throw new InvalidOperationException("Missing RemainingPhotos in saved session.");
-                
+                    : null;
                 losers = state.TryGetValue("Losers", out var losersElement)
                     ? losersElement.Deserialize<List<string>>()
-                    : throw new InvalidOperationException("Missing Losers in saved session.");
-                
+                    : null;
                 photoRotations = state.TryGetValue("PhotoRotations", out var rotationsElement)
                     ? rotationsElement.Deserialize<Dictionary<string, int>>() ?? new Dictionary<string, int>()
                     : new Dictionary<string, int>();
-                
                 totalBatchPhotos = state.TryGetValue("TotalBatchPhotos", out var totalPhotosElement) && totalPhotosElement.TryGetInt32(out int totalPhotos)
                     ? totalPhotos
                     : 0;
-                
                 deletedPhotosCount = state.TryGetValue("DeletedPhotosCount", out var deletedCountElement) && deletedCountElement.TryGetInt32(out int deletedCount)
                     ? deletedCount
                     : 0;
-                
                 initialFileCount = state.TryGetValue("InitialFileCount", out var initialCountElement) && initialCountElement.TryGetInt32(out int initialCount)
                     ? initialCount
                     : 0;
 
-                // Validate state
-                if (batches == null || currentBatch == null || remainingPhotos == null || losers == null ||
-                    currentBatchIndex < 0 || currentBatchIndex >= batches.Count ||
-                    !remainingPhotos.All(f => File.Exists(f)) || !losers.All(f => File.Exists(f)))
+                // If session is completed or invalid, initialize with new photos
+                bool isSessionCompleted = batches == null || currentBatch == null || remainingPhotos == null || losers == null || currentBatchIndex + 1 >= batches.Count;
+                if (isSessionCompleted)
                 {
-                    throw new InvalidOperationException("Invalid or corrupted saved session.");
+                    // Initialize empty lists for completed session
+                    batches = new List<List<string>>();
+                    currentBatch = new List<string>();
+                    remainingPhotos = new List<string>();
+                    losers = new List<string>();
+                    currentBatchIndex = 0;
+                    currentPairIndex = 0;
+                }
+                else
+                {
+                    // Filter out deleted or missing files from RemainingPhotos and Losers
+                    string deleteFolder = Path.Combine(currentFolderPath, "_delete");
+                    remainingPhotos = remainingPhotos.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList();
+                    losers = losers.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList();
+
+                    // Validate in-progress batches
+                    if (batches.Any(batch => batch.Any(f => !File.Exists(f) || f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))))
+                    {
+                        // Filter out invalid batches
+                        batches = batches.Where(batch => batch.All(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))).ToList();
+                        currentBatchIndex = Math.Min(currentBatchIndex, batches.Count - 1);
+                        if (currentBatchIndex < 0) currentBatchIndex = 0;
+                        if (batches.Count > 0)
+                        {
+                            currentBatch = new List<string>(batches[currentBatchIndex]);
+                            remainingPhotos = new List<string>(currentBatch);
+                        }
+                        else
+                        {
+                            currentBatch = new List<string>();
+                            remainingPhotos = new List<string>();
+                            currentBatchIndex = 0;
+                        }
+                    }
                 }
 
-                // Resume tournament
-                isLoadingSession = true; // Set flag for session loading
-                try
+                // Scan for new photos not in RemainingPhotos or Losers
+                var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
+                var searchOption = savedSettings.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+                var allPhotos = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
+                    .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                    .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
+                    .ToList();
+                var processedPhotos = new HashSet<string>(remainingPhotos.Concat(losers));
+                var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
+
+                if (newPhotos.Count > 0)
                 {
-                    selectFolderButton.Visible = false;
-                    settingsGroupBox.Visible = false;
-                    logoPictureBox.Visible = false;
-                    StartTournament(currentBatch);
+                    // Group new photos using saved settings
+                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, savedSettings.BatchSelectionMethod);
+                    var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos); // Pass newPhotos to avoid reprocessing
+                    if (batches == null || batches.Count == 0)
+                    {
+                        batches = newBatches;
+                        currentBatchIndex = 0;
+                    }
+                    else
+                    {
+                        batches.AddRange(newBatches);
+                    }
+                    totalBatchPhotos += newPhotos.Count;
+                    initialFileCount += newPhotos.Count;
                 }
-                finally
+
+                // Start tournament if there are batches to process
+                if (batches != null && batches.Count > 0)
                 {
-                    isLoadingSession = false; // Reset flag
+                    isLoadingSession = true; // Set flag for session loading
+                    try
+                    {
+                        selectFolderButton.Visible = false;
+                        settingsGroupBox.Visible = false;
+                        logoPictureBox.Visible = false;
+                        StartTournament(batches[currentBatchIndex]);
+                    }
+                    finally
+                    {
+                        isLoadingSession = false; // Reset flag
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("No new photos found to process.", "Picksy");
+                    ResetUI();
                 }
             }
             catch (Exception ex)
@@ -292,6 +363,7 @@ namespace Picksy
                 {
                     Console.WriteLine($"Error loading session: {ex}");
                 }
+                ResetUI();
             }
         }
 
@@ -307,7 +379,7 @@ namespace Picksy
             }
 
             currentBatch = new List<string>(batch);
-            if (remainingPhotos == null) // Only set if not loaded from state
+            if (remainingPhotos == null || remainingPhotos.Count == 0) // Only set if not loaded from state or empty
             {
                 remainingPhotos = new List<string>(batch);
             }
@@ -416,7 +488,7 @@ namespace Picksy
                 rightImage?.Dispose();
             }
             // Update remaining photos and batches display
-            int batchesRemaining = batches != null ? batches.Count - currentBatchIndex - 1 : 0;
+            int batchesRemaining = (batches != null && batches.Count > currentBatchIndex) ? batches.Count - currentBatchIndex - 1 : 0;
             remainingLabel.Text = $"Photos remaining: {remainingPhotos.Count} | Batches remaining: {batchesRemaining}";
             UpdatePictureBoxSizes();
         }
@@ -946,27 +1018,95 @@ namespace Picksy
                 string sizeMessage = deleteFolderSizeMB > 1024
                     ? $"{deleteFolderSizeMB / 1024.0:F1} GB"
                     : $"{deleteFolderSizeMB:F2} MB";
-                string message = $"No more batches remain!\n\n" +
-                                $"You just processed {batches?.Count ?? 0} batches, containing {totalBatchPhotos} photos, " +
-                                $"eliminating {deletedPhotosCount} of them and saving {sizeMessage}!\n\n" +
-                                $"When you are ready, erase the '_delete' folder to permanently remove those files";
+                string statsMessage = $"No more batches remain!\n\n" +
+                                     $"You just processed {batches?.Count ?? 0} batches, containing {totalBatchPhotos} photos, " +
+                                     $"eliminating {deletedPhotosCount} of them and saving {sizeMessage}!";
+
+                // Create custom dialog
                 using (var form = new Form
                 {
-                    Text = "Picksy",
-                    Size = new Size(400, 200),
+                    Text = "Picksy - Session Complete",
+                    Size = new Size(400, 300),
                     StartPosition = FormStartPosition.CenterParent,
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     MaximizeBox = false,
                     MinimizeBox = false
                 })
                 {
-                    var label = new Label
+                    // Stats label
+                    var statsLabel = new Label
                     {
-                        Text = message,
-                        Dock = DockStyle.Fill,
-                        TextAlign = ContentAlignment.MiddleCenter
+                        Text = statsMessage,
+                        Location = new Point(20, 20),
+                        Size = new Size(340, 100),
+                        TextAlign = ContentAlignment.TopCenter
                     };
-                    form.Controls.Add(label);
+
+                    // Thanks label
+                    var thanksLabel = new Label
+                    {
+                        Text = "Thanks for Using Picksy!",
+                        Location = new Point(20, 220),
+                        Size = new Size(340, 20),
+                        TextAlign = ContentAlignment.MiddleCenter,
+                        Font = new Font("Microsoft Sans Serif", 10F, FontStyle.Bold)
+                    };
+
+                    // Buttons
+                    var coffeeButton = new Button
+                    {
+                        Text = "Support Picksy",
+                        Size = new Size(100, 30),
+                        Location = new Point(50, 170)
+                    };
+                    coffeeButton.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            Process.Start(new ProcessStartInfo("https://buymeacoffee.com/neislerw") { UseShellExecute = true });
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Error opening Support Picksy: {ex.Message}", "Picksy Error");
+                        }
+                    };
+
+                    var shareButton = new Button
+                    {
+                        Text = "Share Picksy",
+                        Size = new Size(100, 30),
+                        Location = new Point(150, 170)
+                    };
+                    shareButton.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            string postText = $"I just used Picksy to clean up my photos! Processed {batches?.Count ?? 0} batches, {totalBatchPhotos} photos, eliminated {deletedPhotosCount}, and saved {sizeMessage}! Check it out at www.github.com/neislerw/picksy #Picksy #PhotoCleanup";
+                            string encodedText = HttpUtility.UrlEncode(postText);
+                            string xUrl = $"https://x.com/intent/tweet?text={encodedText}";
+                            Process.Start(new ProcessStartInfo(xUrl) { UseShellExecute = true });
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Error sharing to X: {ex.Message}", "Picksy Error");
+                        }
+                    };
+
+                    var closeButton = new Button
+                    {
+                        Text = "Close",
+                        Size = new Size(100, 30),
+                        Location = new Point(250, 170)
+                    };
+                    closeButton.Click += (s, e) => form.Close();
+
+                    // Add controls to form
+                    form.Controls.Add(statsLabel);
+                    form.Controls.Add(thanksLabel);
+                    form.Controls.Add(coffeeButton);
+                    form.Controls.Add(shareButton);
+                    form.Controls.Add(closeButton);
+
                     form.ShowDialog(this);
                 }
             }
