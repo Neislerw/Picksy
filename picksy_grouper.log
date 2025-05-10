@@ -1,170 +1,55 @@
-Batch grouping log - Timestamp: 5/9/2025 8:59:00 PM
+Batch grouping log - Timestamp: 5/10/2025 8:31:43 AM
 Batch Selection Method: By Name
 Batch Size Minimum: 2
 Batch Timing Maximum: 300 seconds
 Include Subfolders: False
 
 Batch 1 (2 photos):
-  20240729_165844.jpg (Timestamp: 7/29/2024 4:58:44 PM)
-  20240729_165856.jpg (Timestamp: 7/29/2024 4:58:56 PM)
-
-Batch 2 (2 photos):
-  20240812_064335.jpg (Timestamp: 8/12/2024 6:43:35 AM)
-  20240812_064343.jpg (Timestamp: 8/12/2024 6:43:43 AM)
-
-Batch 3 (2 photos):
-  20240903_163133.jpg (Timestamp: 9/3/2024 4:31:33 PM)
-  20240903_163502.jpg (Timestamp: 9/3/2024 4:35:01 PM)
-
-Batch 4 (2 photos):
-  20240908_095059(0).jpg (Timestamp: 9/8/2024 9:50:59 AM)
-  20240908_095101.jpg (Timestamp: 9/8/2024 9:51:01 AM)
-
-Batch 5 (3 photos):
-  20240909_135522.jpg (Timestamp: 9/9/2024 1:55:22 PM)
-  20240909_135525.jpg (Timestamp: 9/9/2024 1:55:25 PM)
-  20240909_135530.jpg (Timestamp: 9/9/2024 1:55:30 PM)
-
-Batch 6 (2 photos):
-  20240909_171458.jpg (Timestamp: 9/9/2024 5:14:58 PM)
-  20240909_171505.jpg (Timestamp: 9/9/2024 5:15:05 PM)
-
-Batch 7 (2 photos):
   20240914_113654.jpg (Timestamp: 9/14/2024 11:36:54 AM)
   20240914_113656.jpg (Timestamp: 9/14/2024 11:36:56 AM)
 
-Batch 8 (2 photos):
-  20240929_090325.jpg (Timestamp: 9/29/2024 9:03:25 AM)
-  20240929_090400.jpg (Timestamp: 9/29/2024 9:04:00 AM)
+Batch 2 (2 photos):
+  20241216_112017.jpg (Timestamp: 12/16/2024 11:20:17 AM)
+  20241216_112021.jpg (Timestamp: 12/16/2024 11:20:21 AM)
 
-Batch 9 (2 photos):
-  20240929_092230.jpg (Timestamp: 9/29/2024 9:22:30 AM)
-  20240929_092234.jpg (Timestamp: 9/29/2024 9:22:33 AM)
-
-Batch 10 (2 photos):
-  20241007_161456.jpg (Timestamp: 10/7/2024 4:14:56 PM)
-  20241007_161800.jpg (Timestamp: 10/7/2024 4:18:00 PM)
-
-Batch 11 (2 photos):
-  20241014_193214.jpg (Timestamp: 10/14/2024 7:32:15 PM)
-  20241014_193330.jpg (Timestamp: 10/14/2024 7:33:35 PM)
-
-Batch 12 (2 photos):
-  20241014_200823.jpg (Timestamp: 10/14/2024 8:08:23 PM)
-  20241014_200824.jpg (Timestamp: 10/14/2024 8:08:25 PM)
-
-Batch 13 (2 photos):
-  20241014_211513.jpg (Timestamp: 10/14/2024 9:15:13 PM)
-  20241014_211711.jpg (Timestamp: 10/14/2024 9:17:11 PM)
-
-Batch 14 (2 photos):
-  20241017_172156.jpg (Timestamp: 10/17/2024 5:21:56 PM)
-  20241017_172204.jpg (Timestamp: 10/17/2024 5:22:04 PM)
-
-Batch 15 (2 photos):
-  20241123_172250.jpg (Timestamp: 11/23/2024 5:22:50 PM)
-  20241123_172518.jpg (Timestamp: 11/23/2024 5:25:18 PM)
-
-Batch 16 (2 photos):
-  20241125_200016.jpg (Timestamp: 11/25/2024 8:00:16 PM)
-  20241125_200031.jpg (Timestamp: 11/25/2024 8:00:31 PM)
-
-Batch 17 (3 photos):
-  20241207_060922.jpg (Timestamp: 12/7/2024 6:09:22 AM)
-  20241207_060925.jpg (Timestamp: 12/7/2024 6:09:25 AM)
-  20241207_060929.jpg (Timestamp: 12/7/2024 6:09:28 AM)
-
-Batch 18 (3 photos):
+Batch 3 (3 photos):
   20241220_172948.jpg (Timestamp: 12/20/2024 5:29:48 PM)
   20241220_172954.jpg (Timestamp: 12/20/2024 5:29:54 PM)
   20241220_173000.jpg (Timestamp: 12/20/2024 5:30:00 PM)
 
-Batch 19 (4 photos):
-  20241221_115510.jpg (Timestamp: 12/21/2024 11:55:10 AM)
+Batch 4 (4 photos):
+  20241220_180720.jpg (Timestamp: 12/20/2024 6:07:20 PM)
+  20241220_180730.jpg (Timestamp: 12/20/2024 6:07:31 PM)
+  20241220_180753.jpg (Timestamp: 12/20/2024 6:07:54 PM)
+  20241220_180802.jpg (Timestamp: 12/20/2024 6:08:02 PM)
+
+Batch 5 (3 photos):
+  20241220_181919.jpg (Timestamp: 12/20/2024 6:19:19 PM)
+  20241220_181921.jpg (Timestamp: 12/20/2024 6:19:21 PM)
+  20241220_181925.jpg (Timestamp: 12/20/2024 6:19:26 PM)
+
+Batch 6 (5 photos):
+  20241221_115526.jpg (Timestamp: 12/21/2024 11:55:25 AM)
   20241221_115528.jpg (Timestamp: 12/21/2024 11:55:28 AM)
+  20241221_115529.jpg (Timestamp: 12/21/2024 11:55:29 AM)
   20241221_115538.jpg (Timestamp: 12/21/2024 11:55:38 AM)
   20241221_115550.jpg (Timestamp: 12/21/2024 11:55:50 AM)
 
-Batch 20 (2 photos):
-  20241231_083429.jpg (Timestamp: 12/31/2024 8:34:29 AM)
-  20241231_083513.jpg (Timestamp: 12/31/2024 8:35:13 AM)
-
-Batch 21 (3 photos):
-  20250104_142935.jpg (Timestamp: 1/4/2025 2:29:35 PM)
-  20250104_142943.jpg (Timestamp: 1/4/2025 2:29:43 PM)
-  20250104_142948.jpg (Timestamp: 1/4/2025 2:29:48 PM)
-
-Batch 22 (2 photos):
-  20250104_144038.jpg (Timestamp: 1/4/2025 2:40:38 PM)
-  20250104_144333.jpg (Timestamp: 1/4/2025 2:43:33 PM)
-
-Batch 23 (3 photos):
-  20250104_145854.jpg (Timestamp: 1/4/2025 2:58:54 PM)
-  20250104_145938.jpg (Timestamp: 1/4/2025 2:59:38 PM)
-  20250104_145940.jpg (Timestamp: 1/4/2025 2:59:39 PM)
-
-Batch 24 (2 photos):
-  20250104_150524.jpg (Timestamp: 1/4/2025 3:05:24 PM)
-  20250104_150558.jpg (Timestamp: 1/4/2025 3:05:58 PM)
-
-Batch 25 (2 photos):
-  20250117_162732.jpg (Timestamp: 1/17/2025 4:27:32 PM)
-  20250117_162740.jpg (Timestamp: 1/17/2025 4:27:40 PM)
-
-Batch 26 (2 photos):
-  20250122_064844.jpg (Timestamp: 1/22/2025 6:48:43 AM)
-  20250122_064846.jpg (Timestamp: 1/22/2025 6:48:46 AM)
-
-Batch 27 (2 photos):
-  20250122_075116.jpg (Timestamp: 1/22/2025 7:51:16 AM)
-  20250122_075137.jpg (Timestamp: 1/22/2025 7:51:37 AM)
-
-Batch 28 (6 photos):
-  20250122_075838.jpg (Timestamp: 1/22/2025 7:58:38 AM)
-  20250122_075843.jpg (Timestamp: 1/22/2025 7:58:43 AM)
-  20250122_075844.jpg (Timestamp: 1/22/2025 7:58:44 AM)
-  20250122_075848.jpg (Timestamp: 1/22/2025 7:58:48 AM)
-  20250122_080258.jpg (Timestamp: 1/22/2025 8:02:58 AM)
-  20250122_080310.jpg (Timestamp: 1/22/2025 8:03:10 AM)
-
-Batch 29 (2 photos):
+Batch 7 (3 photos):
+  20250122_171155.jpg (Timestamp: 1/22/2025 5:11:55 PM)
   20250122_171156.jpg (Timestamp: 1/22/2025 5:11:56 PM)
   20250122_171159.jpg (Timestamp: 1/22/2025 5:11:59 PM)
 
-Batch 30 (4 photos):
-  20250122_171237_001.jpg (Timestamp: 1/22/2025 5:12:37 PM)
-  20250122_171237_017.jpg (Timestamp: 1/22/2025 5:12:38 PM)
-  20250122_171237_020.jpg (Timestamp: 1/22/2025 5:12:38 PM)
-  20250122_171237_022.jpg (Timestamp: 1/22/2025 5:12:38 PM)
-
-Batch 31 (2 photos):
-  20250225_112032.jpg (Timestamp: 2/25/2025 11:20:32 AM)
-  20250225_112040.jpg (Timestamp: 2/25/2025 11:20:40 AM)
-
-Batch 32 (3 photos):
-  20250315_155910.jpg (Timestamp: 3/15/2025 3:59:10 PM)
-  20250315_155914.jpg (Timestamp: 3/15/2025 3:59:14 PM)
-  20250315_155919.jpg (Timestamp: 3/15/2025 3:59:19 PM)
-
-Batch 33 (3 photos):
-  20250415_153043.jpg (Timestamp: 4/15/2025 3:30:43 PM)
-  20250415_153046.jpg (Timestamp: 4/15/2025 3:30:46 PM)
-  20250415_153049.jpg (Timestamp: 4/15/2025 3:30:49 PM)
-
-Batch 34 (2 photos):
-  20250415_155727.jpg (Timestamp: 4/15/2025 3:57:27 PM)
-  20250415_155730.jpg (Timestamp: 4/15/2025 3:57:30 PM)
-
-Batch 35 (3 photos):
-  20250424_072342.jpg (Timestamp: 4/24/2025 7:23:41 AM)
-  20250424_072349.jpg (Timestamp: 4/24/2025 7:23:49 AM)
-  20250424_072356.jpg (Timestamp: 4/24/2025 7:23:56 AM)
-
-Batch 36 (2 photos):
-  20250430_170109.jpg (Timestamp: 4/30/2025 5:01:09 PM)
-  20250430_170418.jpg (Timestamp: 4/30/2025 5:04:18 PM)
-
-Batch 37 (2 photos):
-  20250505_123037.jpg (Timestamp: 5/5/2025 12:30:36 PM)
-  20250505_123051.jpg (Timestamp: 5/5/2025 12:30:50 PM)
+Batch 8 (11 photos):
+  20250122_171229_001.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_002.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_004.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_005.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_006.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_007.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_008.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_009.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_010.jpg (Timestamp: 1/22/2025 5:12:29 PM)
+  20250122_171229_011.jpg (Timestamp: 1/22/2025 5:12:30 PM)
+  20250122_171229_012.jpg (Timestamp: 1/22/2025 5:12:30 PM)
 

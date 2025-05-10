@@ -55,7 +55,6 @@
             this.toolTipLeft = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipRight = new System.Windows.Forms.ToolTip(this.components);
             this.saveAndQuitButton = new System.Windows.Forms.Button();
-            this.loadSessionButton = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).BeginInit();
             this.thumbnailPanel.SuspendLayout();
@@ -301,7 +300,7 @@
             // 
             this.toolTipLeft.AutoPopDelay = 5000;
             this.toolTipLeft.InitialDelay = 500;
-            this.toolTipRight.ReshowDelay = 100;
+            this.toolTipLeft.ReshowDelay = 100;
             // 
             // toolTipRight
             // 
@@ -320,21 +319,10 @@
             this.saveAndQuitButton.Visible = false;
             this.saveAndQuitButton.Click += new System.EventHandler(this.SaveAndQuitButton_Click);
             // 
-            // loadSessionButton
-            // 
-            this.loadSessionButton.Location = new System.Drawing.Point(325, 520);
-            this.loadSessionButton.Name = "loadSessionButton";
-            this.loadSessionButton.Size = new System.Drawing.Size(150, 30);
-            this.loadSessionButton.TabIndex = 20;
-            this.loadSessionButton.Text = "Load Session";
-            this.loadSessionButton.UseVisualStyleBackColor = true;
-            this.loadSessionButton.Click += new System.EventHandler(this.LoadSessionButton_Click);
-            // 
             // MainForm
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 600);
-            this.Controls.Add(this.loadSessionButton);
             this.Controls.Add(this.saveAndQuitButton);
             this.Controls.Add(this.logoPictureBox);
             this.Controls.Add(this.settingsGroupBox);
@@ -392,6 +380,5 @@
         private System.Windows.Forms.ToolTip toolTipLeft;
         private System.Windows.Forms.ToolTip toolTipRight;
         private System.Windows.Forms.Button saveAndQuitButton;
-        private System.Windows.Forms.Button loadSessionButton;
     }
 }
