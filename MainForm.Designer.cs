@@ -297,7 +297,7 @@
             this.batchSizeNumericUpDown.Name = "batchSizeNumericUpDown";
             this.batchSizeNumericUpDown.Size = new System.Drawing.Size(80, 28);
             this.batchSizeNumericUpDown.TabIndex = 1;
-            this.batchSizeNumericUpDown.Value = 4;
+            this.batchSizeNumericUpDown.Value = 2;
             // 
             // batchSizeLabel
             // 
