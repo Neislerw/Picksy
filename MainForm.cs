@@ -262,8 +262,38 @@ namespace Picksy
                     ? initialCount
                     : 0;
 
+                // Validate and filter all file lists to exclude missing or deleted files
+                string deleteFolder = Path.Combine(currentFolderPath, "_delete");
+                var validFilesFilter = new Func<string, bool>(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar));
+
+                // Filter RemainingPhotos and Losers
+                int originalRemainingCount = remainingPhotos?.Count ?? 0;
+                remainingPhotos = (remainingPhotos ?? new List<string>()).Where(validFilesFilter).ToList();
+                losers = (losers ?? new List<string>()).Where(validFilesFilter).ToList();
+                deletedPhotosCount += originalRemainingCount - remainingPhotos.Count; // Update deleted count
+
+                // Filter CurrentBatch
+                int originalCurrentBatchCount = currentBatch?.Count ?? 0;
+                currentBatch = (currentBatch ?? new List<string>()).Where(validFilesFilter).ToList();
+                deletedPhotosCount += originalCurrentBatchCount - currentBatch.Count;
+
+                // Filter Batches and remove empty or invalid batches
+                if (batches != null)
+                {
+                    int originalBatchPhotoCount = batches.Sum(b => b.Count);
+                    batches = batches.Select(batch => batch.Where(validFilesFilter).ToList())
+                                    .Where(batch => batch.Any()) // Remove empty batches
+                                    .ToList();
+                    int newBatchPhotoCount = batches.Sum(b => b.Count);
+                    deletedPhotosCount += originalBatchPhotoCount - newBatchPhotoCount;
+                }
+
+                // Update PhotoRotations to remove entries for invalid files
+                var validFiles = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
+                photoRotations = photoRotations.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
                 // If session is completed or invalid, initialize with new photos
-                bool isSessionCompleted = batches == null || currentBatch == null || remainingPhotos == null || losers == null || currentBatchIndex + 1 >= batches.Count;
+                bool isSessionCompleted = batches == null || batches.Count == 0 || currentBatch == null || remainingPhotos == null || losers == null || currentBatchIndex + 1 >= batches.Count;
                 if (isSessionCompleted)
                 {
                     // Initialize empty lists for completed session
@@ -276,29 +306,15 @@ namespace Picksy
                 }
                 else
                 {
-                    // Filter out deleted or missing files from RemainingPhotos and Losers
-                    string deleteFolder = Path.Combine(currentFolderPath, "_delete");
-                    remainingPhotos = remainingPhotos.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList();
-                    losers = losers.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToList();
+                    // Ensure currentBatchIndex is valid
+                    currentBatchIndex = Math.Min(currentBatchIndex, batches.Count - 1);
+                    if (currentBatchIndex < 0) currentBatchIndex = 0;
 
-                    // Validate in-progress batches
-                    if (batches.Any(batch => batch.Any(f => !File.Exists(f) || f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))))
+                    // If CurrentBatch is empty or invalid, reset it from Batches or advance
+                    if (currentBatch.Count == 0 && batches.Count > 0)
                     {
-                        // Filter out invalid batches
-                        batches = batches.Where(batch => batch.All(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))).ToList();
-                        currentBatchIndex = Math.Min(currentBatchIndex, batches.Count - 1);
-                        if (currentBatchIndex < 0) currentBatchIndex = 0;
-                        if (batches.Count > 0)
-                        {
-                            currentBatch = new List<string>(batches[currentBatchIndex]);
-                            remainingPhotos = new List<string>(currentBatch);
-                        }
-                        else
-                        {
-                            currentBatch = new List<string>();
-                            remainingPhotos = new List<string>();
-                            currentBatchIndex = 0;
-                        }
+                        currentBatch = new List<string>(batches[currentBatchIndex]);
+                        remainingPhotos = new List<string>(currentBatch);
                     }
                 }
 
@@ -309,14 +325,14 @@ namespace Picksy
                     .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                     .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                     .ToList();
-                var processedPhotos = new HashSet<string>(remainingPhotos.Concat(losers));
+                var processedPhotos = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()));
                 var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
 
                 if (newPhotos.Count > 0)
                 {
                     // Group new photos using saved settings
                     var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, savedSettings.BatchSelectionMethod);
-                    var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos); // Pass newPhotos to avoid reprocessing
+                    var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
                     if (batches == null || batches.Count == 0)
                     {
                         batches = newBatches;
@@ -565,7 +581,7 @@ namespace Picksy
             saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, pictureBoxLeft.Bottom + 10);
             remainingLabel.Location = new Point(20, saveAndQuitButton.Bottom + 15); // Increased gap
             instructionLabel.Location = new Point(20, remainingLabel.Bottom + 15);
-            copyrightLabel.Location = new Point(20, instructionLabel.Bottom + 15); // Position below instructionLabel
+            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, instructionLabel.Bottom + 15); // Centered horizontally
             thumbnailPanel.Location = new Point(20, menuStrip.Height + 20);
             deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 20); // Increased gap
         }
@@ -591,7 +607,7 @@ namespace Picksy
             selectFolderButton.Location = new Point(x, startY);
 
             // Copyright Label
-            copyrightLabel.Location = new Point(20, ClientSize.Height - copyrightLabel.Height - 20); // Bottom-left corner
+            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, ClientSize.Height - copyrightLabel.Height - 20); // Centered horizontally
         }
 
         protected override void OnResize(EventArgs e)
@@ -663,16 +679,32 @@ namespace Picksy
 
             try
             {
+                // Filter out invalid or deleted files before saving
+                string deleteFolder = Path.Combine(currentFolderPath, "_delete");
+                var validFilesFilter = new Func<string, bool>(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar));
+
+                // Filter Batches, CurrentBatch, RemainingPhotos, and Losers
+                var filteredBatches = batches?.Select(batch => batch.Where(validFilesFilter).ToList())
+                                             .Where(batch => batch.Any())
+                                             .ToList() ?? new List<List<string>>();
+                var filteredCurrentBatch = currentBatch?.Where(validFilesFilter).ToList() ?? new List<string>();
+                var filteredRemainingPhotos = remainingPhotos?.Where(validFilesFilter).ToList() ?? new List<string>();
+                var filteredLosers = losers?.Where(validFilesFilter).ToList() ?? new List<string>();
+
+                // Filter PhotoRotations
+                var validFiles = new HashSet<string>(filteredRemainingPhotos.Concat(filteredLosers).Concat(filteredBatches.SelectMany(b => b)));
+                var filteredPhotoRotations = photoRotations.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
                 var state = new
                 {
                     CurrentFolderPath = currentFolderPath,
-                    Batches = batches,
+                    Batches = filteredBatches,
                     CurrentBatchIndex = currentBatchIndex,
-                    CurrentBatch = currentBatch,
+                    CurrentBatch = filteredCurrentBatch,
                     CurrentPairIndex = currentPairIndex,
-                    RemainingPhotos = remainingPhotos,
-                    Losers = losers,
-                    PhotoRotations = photoRotations,
+                    RemainingPhotos = filteredRemainingPhotos,
+                    Losers = filteredLosers,
+                    PhotoRotations = filteredPhotoRotations,
                     TotalBatchPhotos = totalBatchPhotos,
                     DeletedPhotosCount = deletedPhotosCount,
                     InitialFileCount = initialFileCount,
@@ -1022,46 +1054,70 @@ namespace Picksy
                 string sizeMessage = deleteFolderSizeMB > 1024
                     ? $"{deleteFolderSizeMB / 1024.0:F1} GB"
                     : $"{deleteFolderSizeMB:F2} MB";
-                string statsMessage = $"No more batches remain!\n\n" +
-                                     $"You just processed {batches?.Count ?? 0} batches, containing {totalBatchPhotos} photos, " +
+                string titleMessage = "No more batches remain!";
+                string statsMessage = $"You just processed {batches?.Count ?? 0} batches, containing {totalBatchPhotos} photos, " +
                                      $"eliminating {deletedPhotosCount} of them and saving {sizeMessage}!";
 
-                // Create custom dialog
+                // Create custom dialog with dark theme, larger size, and Montserrat SemiBold font
                 using (var form = new Form
                 {
                     Text = "Picksy - Session Complete",
-                    Size = new Size(400, 300),
+                    Size = new Size(600, 450), // Increased dialog size
                     StartPosition = FormStartPosition.CenterParent,
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     MaximizeBox = false,
-                    MinimizeBox = false
+                    MinimizeBox = false,
+                    BackColor = Color.FromArgb(26, 26, 26), // Dark gray background
+                    ForeColor = Color.White, // White text
+                    Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular) // Montserrat SemiBold 12pt
                 })
                 {
+                    // Title label (No more batches remain!)
+                    var titleLabel = new Label
+                    {
+                        Text = titleMessage,
+                        Location = new Point(20, 30),
+                        Size = new System.Drawing.Size(520, 30),
+                        TextAlign = ContentAlignment.TopCenter,
+                        BackColor = Color.Transparent,
+                        ForeColor = Color.White,
+                        Font = new Font("Montserrat SemiBold", 16F, FontStyle.Regular) // Larger title font
+                    };
+
                     // Stats label
                     var statsLabel = new Label
                     {
                         Text = statsMessage,
-                        Location = new Point(20, 20),
-                        Size = new Size(340, 100),
-                        TextAlign = ContentAlignment.TopCenter
+                        Location = new Point(20, 100),
+                        Size = new System.Drawing.Size(520, 100),
+                        TextAlign = ContentAlignment.TopCenter,
+                        BackColor = Color.Transparent,
+                        ForeColor = Color.White,
+                        Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular)
                     };
 
                     // Thanks label
                     var thanksLabel = new Label
                     {
                         Text = "Thanks for Using Picksy!",
-                        Location = new Point(20, 220),
-                        Size = new Size(340, 20),
+                        Location = new Point(20, 230),
+                        Size = new System.Drawing.Size(520, 40),
                         TextAlign = ContentAlignment.MiddleCenter,
-                        Font = new Font("Microsoft Sans Serif", 10F, FontStyle.Bold)
+                        BackColor = Color.Transparent,
+                        ForeColor = Color.White, // White for emphasis
+                        Font = new Font("Montserrat SemiBold", 20F, FontStyle.Bold) // Largest text
                     };
 
                     // Buttons
                     var coffeeButton = new Button
                     {
-                        Text = "Support Picksy",
-                        Size = new Size(100, 30),
-                        Location = new Point(50, 170)
+                        Text = "Support", // Shortened to prevent wrapping
+                        Size = new System.Drawing.Size(140, 50), // Larger button size
+                        Location = new Point(80, 300),
+                        BackColor = Color.FromArgb(26, 26, 26),
+                        ForeColor = Color.White,
+                        Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
+                        UseVisualStyleBackColor = false
                     };
                     coffeeButton.Click += (s, e) =>
                     {
@@ -1077,9 +1133,13 @@ namespace Picksy
 
                     var shareButton = new Button
                     {
-                        Text = "Share Picksy",
-                        Size = new System.Drawing.Size(120, 40), // Increased size
-                        Location = new System.Drawing.Point(150, 170)
+                        Text = "Share", // Shortened to prevent wrapping
+                        Size = new System.Drawing.Size(140, 50), // Larger button size
+                        Location = new Point(230, 300),
+                        BackColor = Color.FromArgb(26, 26, 26),
+                        ForeColor = Color.White,
+                        Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
+                        UseVisualStyleBackColor = false
                     };
                     shareButton.Click += (s, e) =>
                     {
@@ -1099,12 +1159,17 @@ namespace Picksy
                     var closeButton = new Button
                     {
                         Text = "Close",
-                        Size = new Size(100, 30),
-                        Location = new Point(250, 170)
+                        Size = new System.Drawing.Size(140, 50), // Larger button size
+                        Location = new Point(380, 300),
+                        BackColor = Color.FromArgb(26, 26, 26),
+                        ForeColor = Color.White,
+                        Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
+                        UseVisualStyleBackColor = false
                     };
                     closeButton.Click += (s, e) => form.Close();
 
                     // Add controls to form
+                    form.Controls.Add(titleLabel);
                     form.Controls.Add(statsLabel);
                     form.Controls.Add(thanksLabel);
                     form.Controls.Add(coffeeButton);
