@@ -277,15 +277,32 @@ namespace Picksy
                 currentBatch = (currentBatch ?? new List<string>()).Where(validFilesFilter).ToList();
                 deletedPhotosCount += originalCurrentBatchCount - currentBatch.Count;
 
-                // Filter Batches and remove empty or invalid batches
+                // Filter Batches, remove completed and invalid batches
                 if (batches != null)
                 {
                     int originalBatchPhotoCount = batches.Sum(b => b.Count);
-                    batches = batches.Select(batch => batch.Where(validFilesFilter).ToList())
-                                    .Where(batch => batch.Any()) // Remove empty batches
+                    // Keep only batches from CurrentBatchIndex onward, and filter valid files
+                    batches = batches.Skip(currentBatchIndex)
+                                    .Select(batch => batch.Where(validFilesFilter).ToList())
+                                    .Where(batch => batch.Count >= savedSettings.BatchSizeMinimum || (isLoadingSession && batch.Any(f => currentBatch?.Contains(f) == true)))
                                     .ToList();
                     int newBatchPhotoCount = batches.Sum(b => b.Count);
-                    deletedPhotosCount += originalBatchPhotoCount - newBatchPhotoCount;
+                    deletedPhotosCount += originalBatchPhotoCount - newBatchPhotoCount - originalCurrentBatchCount;
+
+                    // Adjust CurrentBatchIndex to point to the first valid batch
+                    if (batches.Count == 0 || currentBatchIndex >= batches.Count)
+                    {
+                        currentBatchIndex = 0;
+                    }
+                    else
+                    {
+                        currentBatchIndex = 0; // Reset to start of remaining batches
+                    }
+                }
+                else
+                {
+                    batches = new List<List<string>>();
+                    currentBatchIndex = 0;
                 }
 
                 // Update PhotoRotations to remove entries for invalid files
@@ -293,7 +310,7 @@ namespace Picksy
                 photoRotations = photoRotations.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                 // If session is completed or invalid, initialize with new photos
-                bool isSessionCompleted = batches == null || batches.Count == 0 || currentBatch == null || remainingPhotos == null || losers == null || currentBatchIndex + 1 >= batches.Count;
+                bool isSessionCompleted = batches.Count == 0 || currentBatch == null || remainingPhotos == null || losers == null || currentBatchIndex >= batches.Count;
                 if (isSessionCompleted)
                 {
                     // Initialize empty lists for completed session
@@ -306,26 +323,23 @@ namespace Picksy
                 }
                 else
                 {
-                    // Ensure currentBatchIndex is valid
-                    currentBatchIndex = Math.Min(currentBatchIndex, batches.Count - 1);
-                    if (currentBatchIndex < 0) currentBatchIndex = 0;
-
-                    // If CurrentBatch is empty or invalid, reset it from Batches or advance
-                    if (currentBatch.Count == 0 && batches.Count > 0)
+                    // If CurrentBatch is empty or invalid, reset it from the current batch index
+                    if (currentBatch.Count < savedSettings.BatchSizeMinimum && batches.Count > 0)
                     {
                         currentBatch = new List<string>(batches[currentBatchIndex]);
                         remainingPhotos = new List<string>(currentBatch);
+                        currentPairIndex = 0;
                     }
                 }
 
-                // Scan for new photos not in RemainingPhotos or Losers
+                // Scan for new photos not in RemainingPhotos, Losers, or Batches
                 var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
                 var searchOption = savedSettings.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
                 var allPhotos = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
                     .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                     .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                     .ToList();
-                var processedPhotos = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()));
+                var processedPhotos = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
                 var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
 
                 if (newPhotos.Count > 0)
@@ -333,21 +347,44 @@ namespace Picksy
                     // Group new photos using saved settings
                     var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, savedSettings.BatchSelectionMethod);
                     var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
-                    if (batches == null || batches.Count == 0)
+                    // Only add new batches that meet BatchSizeMinimum
+                    newBatches = newBatches.Where(b => b.Count >= savedSettings.BatchSizeMinimum).ToList();
+                    if (newBatches.Any())
                     {
-                        batches = newBatches;
-                        currentBatchIndex = 0;
+                        if (batches.Count == 0)
+                        {
+                            batches = newBatches;
+                            currentBatchIndex = 0;
+                            if (!isSessionCompleted)
+                            {
+                                currentBatch = new List<string>(batches[0]);
+                                remainingPhotos = new List<string>(currentBatch);
+                                currentPairIndex = 0;
+                            }
+                        }
+                        else
+                        {
+                            batches.AddRange(newBatches);
+                        }
+                        totalBatchPhotos += newBatches.Sum(b => b.Count);
+                        initialFileCount += newPhotos.Count;
                     }
-                    else
+                    // Log new photos and batches for debugging
+                    try
                     {
-                        batches.AddRange(newBatches);
+                        File.AppendAllText("picksy_debug.log", $"[{DateTime.Now}] LoadSession: Found {newPhotos.Count} new photos, grouped into {newBatches.Count} valid batches.\n");
                     }
-                    totalBatchPhotos += newPhotos.Count;
-                    initialFileCount += newPhotos.Count;
+                    catch
+                    {
+                        Console.WriteLine($"Debug: Found {newPhotos.Count} new photos, grouped into {newBatches.Count} valid batches.");
+                    }
                 }
 
+                // Recalculate totalBatchPhotos to ensure accuracy
+                totalBatchPhotos = (batches?.Sum(b => b.Count) ?? 0) + (currentBatch?.Count ?? 0);
+
                 // Start tournament if there are batches to process
-                if (batches != null && batches.Count > 0)
+                if (batches.Count > 0 && currentBatch.Count >= savedSettings.BatchSizeMinimum)
                 {
                     isLoadingSession = true; // Set flag for session loading
                     try
@@ -355,7 +392,7 @@ namespace Picksy
                         selectFolderButton.Visible = false;
                         settingsGroupBox.Visible = false;
                         logoPictureBox.Visible = false;
-                        StartTournament(batches[currentBatchIndex]);
+                        StartTournament(currentBatch);
                     }
                     finally
                     {
@@ -364,7 +401,7 @@ namespace Picksy
                 }
                 else
                 {
-                    MessageBox.Show("No new photos found to process.", "Picksy");
+                    MessageBox.Show("No valid batches found to process.", "Picksy");
                     ResetUI();
                 }
             }
@@ -1062,7 +1099,7 @@ namespace Picksy
                 using (var form = new Form
                 {
                     Text = "Picksy - Session Complete",
-                    Size = new Size(600, 450), // Increased dialog size
+                    Size = new Size(700, 500), // Increased dialog size
                     StartPosition = FormStartPosition.CenterParent,
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     MaximizeBox = false,
@@ -1077,19 +1114,19 @@ namespace Picksy
                     {
                         Text = titleMessage,
                         Location = new Point(20, 30),
-                        Size = new System.Drawing.Size(520, 30),
+                        Size = new Size(660, 40),
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White,
-                        Font = new Font("Montserrat SemiBold", 16F, FontStyle.Regular) // Larger title font
+                        Font = new Font("Montserrat SemiBold", 18F, FontStyle.Bold) // Larger title font
                     };
 
                     // Stats label
                     var statsLabel = new Label
                     {
                         Text = statsMessage,
-                        Location = new Point(20, 100),
-                        Size = new System.Drawing.Size(520, 100),
+                        Location = new Point(20, 80),
+                        Size = new Size(660, 120),
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White,
@@ -1100,20 +1137,20 @@ namespace Picksy
                     var thanksLabel = new Label
                     {
                         Text = "Thanks for Using Picksy!",
-                        Location = new Point(20, 230),
-                        Size = new System.Drawing.Size(520, 40),
+                        Location = new Point(20, 250),
+                        Size = new Size(660, 50),
                         TextAlign = ContentAlignment.MiddleCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White, // White for emphasis
-                        Font = new Font("Montserrat SemiBold", 20F, FontStyle.Bold) // Largest text
+                        Font = new Font("Montserrat SemiBold", 24F, FontStyle.Bold) // Largest text
                     };
 
                     // Buttons
                     var coffeeButton = new Button
                     {
-                        Text = "Support", // Shortened to prevent wrapping
-                        Size = new System.Drawing.Size(140, 50), // Larger button size
-                        Location = new Point(80, 300),
+                        Text = "Support Picksy", // Full text
+                        Size = new Size(160, 60), // Larger button size
+                        Location = new Point(90, 330),
                         BackColor = Color.FromArgb(26, 26, 26),
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1133,9 +1170,9 @@ namespace Picksy
 
                     var shareButton = new Button
                     {
-                        Text = "Share", // Shortened to prevent wrapping
-                        Size = new System.Drawing.Size(140, 50), // Larger button size
-                        Location = new Point(230, 300),
+                        Text = "Share Picksy", // Full text
+                        Size = new Size(160, 60), // Larger button size
+                        Location = new Point(270, 330),
                         BackColor = Color.FromArgb(26, 26, 26),
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1159,8 +1196,8 @@ namespace Picksy
                     var closeButton = new Button
                     {
                         Text = "Close",
-                        Size = new System.Drawing.Size(140, 50), // Larger button size
-                        Location = new Point(380, 300),
+                        Size = new Size(160, 60), // Larger button size
+                        Location = new Point(450, 330),
                         BackColor = Color.FromArgb(26, 26, 26),
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
