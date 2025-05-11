@@ -550,29 +550,30 @@ namespace Picksy
         private void UpdatePictureBoxSizes()
         {
             // Calculate available space, accounting for menu strip, buttons, and labels
-            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - 40;
-            int availableWidth = (ClientSize.Width - 30) / 2; // Split for two images with padding
+            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - copyrightLabel.Height - 80; // Increased padding, account for copyrightLabel
+            int availableWidth = (ClientSize.Width - 40) / 2; // Increased side padding to 20 per side
 
             // Set PictureBox size to fit images without cropping
             pictureBoxLeft.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxRight.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxLeft.Size = new Size(availableWidth, availableHeight);
             pictureBoxRight.Size = new Size(availableWidth, availableHeight);
-            pictureBoxLeft.Location = new Point(10, menuStrip.Height + 10);
-            pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 10, menuStrip.Height + 10);
-            rotateClockwiseButton.Location = new Point(10, pictureBoxLeft.Bottom + 5);
-            rotateCounterclockwiseButton.Location = new Point(ClientSize.Width - rotateCounterclockwiseButton.Width - 10, pictureBoxLeft.Bottom + 5);
-            saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, pictureBoxLeft.Bottom + 5);
-            remainingLabel.Location = new Point(10, saveAndQuitButton.Bottom + 5);
-            instructionLabel.Location = new Point(10, remainingLabel.Bottom + 5);
-            thumbnailPanel.Location = new Point(20, menuStrip.Height + 10);
-            deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 10);
+            pictureBoxLeft.Location = new Point(20, menuStrip.Height + 20); // Increased top/left padding
+            pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 20, menuStrip.Height + 20);
+            rotateClockwiseButton.Location = new Point(20, pictureBoxLeft.Bottom + 10); // Increased gap
+            rotateCounterclockwiseButton.Location = new Point(ClientSize.Width - rotateCounterclockwiseButton.Width - 20, pictureBoxLeft.Bottom + 10);
+            saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, pictureBoxLeft.Bottom + 10);
+            remainingLabel.Location = new Point(20, saveAndQuitButton.Bottom + 15); // Increased gap
+            instructionLabel.Location = new Point(20, remainingLabel.Bottom + 15);
+            copyrightLabel.Location = new Point(20, instructionLabel.Bottom + 15); // Position below instructionLabel
+            thumbnailPanel.Location = new Point(20, menuStrip.Height + 20);
+            deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 20); // Increased gap
         }
 
         private void UpdateMainPageControlsPosition()
         {
             // Center the logo, settings group box, and select folder button vertically
-            int totalHeight = logoPictureBox.Height + 10 + settingsGroupBox.Height + 10 + selectFolderButton.Height;
+            int totalHeight = logoPictureBox.Height + 30 + settingsGroupBox.Height + 30 + selectFolderButton.Height + copyrightLabel.Height + 30; // Increased spacing, account for copyrightLabel
             int startY = (ClientSize.Height - totalHeight) / 2;
 
             // Logo PictureBox
@@ -580,14 +581,17 @@ namespace Picksy
             logoPictureBox.Location = new Point(x, startY);
 
             // Settings GroupBox
-            startY += logoPictureBox.Height + 10;
+            startY += logoPictureBox.Height + 30; // Increased gap
             x = (ClientSize.Width - settingsGroupBox.Width) / 2;
             settingsGroupBox.Location = new Point(x, startY);
 
             // Select Folder Button
-            startY += settingsGroupBox.Height + 10;
+            startY += settingsGroupBox.Height + 30; // Increased gap
             x = (ClientSize.Width - selectFolderButton.Width) / 2;
             selectFolderButton.Location = new Point(x, startY);
+
+            // Copyright Label
+            copyrightLabel.Location = new Point(20, ClientSize.Height - copyrightLabel.Height - 20); // Bottom-left corner
         }
 
         protected override void OnResize(EventArgs e)
@@ -879,7 +883,7 @@ namespace Picksy
                 {
                     var pictureBox = new PictureBox
                     {
-                        Size = new Size(100, 100),
+                        Size = new Size(120, 120), // Increased thumbnail size
                         SizeMode = PictureBoxSizeMode.Zoom,
                         Image = Image.FromFile(loser)
                     };
@@ -1074,8 +1078,8 @@ namespace Picksy
                     var shareButton = new Button
                     {
                         Text = "Share Picksy",
-                        Size = new Size(100, 30),
-                        Location = new Point(150, 170)
+                        Size = new System.Drawing.Size(120, 40), // Increased size
+                        Location = new System.Drawing.Point(150, 170)
                     };
                     shareButton.Click += (s, e) =>
                     {
