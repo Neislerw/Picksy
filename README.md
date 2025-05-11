@@ -1,6 +1,6 @@
 # Picksy
 
-![Picksy Logo](Resources/logo.png)
+![Picksy Logo](Resources/logo-light.png)
 
 Picksy is a Windows Application that helps you slim down your photo albums by grouping images in to batches and letting you systematically select favorites.  Non-Selected images are moved to a "_delete" folder where you can delete permenantly or archive.
 
