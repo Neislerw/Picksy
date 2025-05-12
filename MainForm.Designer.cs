@@ -41,6 +41,7 @@
             this.rotateCounterclockwiseButton = new System.Windows.Forms.Button();
             this.deletePromptLabel = new System.Windows.Forms.Label();
             this.settingsGroupBox = new System.Windows.Forms.GroupBox();
+            this.skipAnimationsCheckBox = new System.Windows.Forms.CheckBox();
             this.batchSelectionMethodComboBox = new System.Windows.Forms.ComboBox();
             this.batchSelectionMethodLabel = new System.Windows.Forms.Label();
             this.skipConfirmationCheckBox = new System.Windows.Forms.CheckBox();
@@ -58,12 +59,12 @@
             this.saveAndQuitButton = new System.Windows.Forms.Button();
             this.copyrightLabel = new System.Windows.Forms.Label();
             this.batchProgressLabel = new System.Windows.Forms.Label();
+            this.hoverTimer = new System.Windows.Forms.Timer(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).BeginInit();
             this.thumbnailPanel.SuspendLayout();
             this.menuStrip.SuspendLayout();
             this.settingsGroupBox.SuspendLayout();
-            this.hoverTimer = new System.Windows.Forms.Timer(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.batchSizeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).BeginInit();
@@ -190,6 +191,7 @@
             // settingsGroupBox
             // 
             this.settingsGroupBox.BackColor = System.Drawing.Color.Transparent;
+            this.settingsGroupBox.Controls.Add(this.skipAnimationsCheckBox);
             this.settingsGroupBox.Controls.Add(this.batchSelectionMethodComboBox);
             this.settingsGroupBox.Controls.Add(this.batchSelectionMethodLabel);
             this.settingsGroupBox.Controls.Add(this.skipConfirmationCheckBox);
@@ -208,6 +210,18 @@
             this.settingsGroupBox.Size = new System.Drawing.Size(560, 440);
             this.settingsGroupBox.TabIndex = 17;
             this.settingsGroupBox.TabStop = false;
+            // 
+            // skipAnimationsCheckBox
+            // 
+            this.skipAnimationsCheckBox.AutoSize = true;
+            this.skipAnimationsCheckBox.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.skipAnimationsCheckBox.ForeColor = System.Drawing.Color.White;
+            this.skipAnimationsCheckBox.Location = new System.Drawing.Point(30, 370);
+            this.skipAnimationsCheckBox.Name = "skipAnimationsCheckBox";
+            this.skipAnimationsCheckBox.Size = new System.Drawing.Size(200, 26);
+            this.skipAnimationsCheckBox.TabIndex = 10;
+            this.skipAnimationsCheckBox.Text = "Skip Animations";
+            this.skipAnimationsCheckBox.UseVisualStyleBackColor = true;
             // 
             // batchSelectionMethodComboBox
             // 
@@ -393,10 +407,15 @@
             this.batchProgressLabel.ForeColor = System.Drawing.Color.Gray;
             this.batchProgressLabel.Location = new System.Drawing.Point(220, 730);
             this.batchProgressLabel.Name = "batchProgressLabel";
-            this.batchProgressLabel.Size = new System.Drawing.Size(400, 16);
+            this.batchProgressLabel.Size = new System.Drawing.Size(300, 16); // Increased width to prevent text cutoff
             this.batchProgressLabel.TabIndex = 22;
-            this.batchProgressLabel.Text = "Batch Progress: 0% Viewed";
+            this.batchProgressLabel.Text = "Batch Progress: 0% Seen";
             this.batchProgressLabel.Visible = false;
+            // 
+            // hoverTimer
+            // 
+            this.hoverTimer.Interval = 15;
+            this.hoverTimer.Tick += new System.EventHandler(this.HoverTimer_Tick);
             // 
             // MainForm
             // 
@@ -461,6 +480,7 @@
         private System.Windows.Forms.NumericUpDown batchSizeNumericUpDown;
         private System.Windows.Forms.Label batchSizeLabel;
         private System.Windows.Forms.Label settingsHeaderLabel;
+        private System.Windows.Forms.CheckBox skipAnimationsCheckBox;
         private System.Windows.Forms.PictureBox logoPictureBox;
         private System.Windows.Forms.ToolTip toolTipLeft;
         private System.Windows.Forms.ToolTip toolTipRight;
