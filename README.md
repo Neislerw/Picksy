@@ -4,6 +4,13 @@
 
 Picksy is a Windows Application that helps you slim down your photo albums by grouping images in to batches and letting you systematically select favorites.  Non-Selected images are moved to a "_delete" folder where you can delete permenantly or archive.
 
+If you are like me, when you take photos of things you take several all at once to try and get a good one. But over time, those extra photos sit in your camera roll taking up space and cluttering your gallery. When you go to show someone a photo from one of those batches, you just kinda guess from the thumbnail which is the "good one" or maybe flip through them.
+I always had this problem and never found the time to sit down and sort through them.  Eventually I had over 100GB of photos in my Google Photos account.  I was too afraid to delete the batches because ONE of them IS the best one, and I just didn't know which one it was yet.  So I made this tool to help me systematically review batches of photos and select ones for deletion.
+
+Picksy is FREE, it is Open Source, and it runs entirely locally on your computer (your photos stay private!).  It is also Non-Destructive; Picksy doesn't delete anything, it simply moves your non-selected photos to a subfolder called "_delete" where you can make the final call on whether you want to archive them or delete them forever.
+
+You can 'Save and Quit' and Picksy will keep a savestate file in your folder that handles which pictures have been reviewed and which have not.  You can come back and finish reviewing photos at a later date.  You can even keep adding photos and Picksy will know which ones have been kept previously to save you time!
+
 ## Features
 - **Photo Grouping**: Groups images with filenames like `YYYYMMDD_HHMMSS_XXX.jpg` (e.g., `20250122_171223_003.jpg`) taken within close proximity of each other.
 - **Tournament-Style Selection**:

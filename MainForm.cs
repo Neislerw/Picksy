@@ -28,6 +28,23 @@ namespace Picksy
         private int totalBatchPhotos = 0; // Total photos in all batches
         private int deletedPhotosCount = 0; // Total photos moved to _delete
         private bool isLoadingSession = false; // Flag to indicate session loading
+        private int initialBatchSize = 0; // Track initial batch size for progress bar
+        private HashSet<string> seenPhotos = new HashSet<string>(); // Track seen photos
+        private HashSet<string> reseenPhotos = new HashSet<string>(); // Track reseen photos
+
+        // Custom progress panels
+        private Panel seenProgressContainer;
+        private Panel seenProgressBar;
+        private Panel reseenProgressContainer;
+        private Panel reseenProgressBar;
+
+        // Hover effect fields
+        private bool isHovering = false;
+        private Color baseColor = Color.FromArgb(26, 26, 26);
+        private Color hoverColor = Color.FromArgb(60, 60, 60);
+        private int transitionSteps = 10;
+        private int currentStep = 0;
+        private Button? currentButton;
 
         public MainForm()
         {
@@ -49,6 +66,7 @@ namespace Picksy
             deletePromptLabel.Visible = false;
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
+            batchProgressLabel.Visible = false; // Hide batch progress label initially
             selectFolderButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
@@ -63,6 +81,141 @@ namespace Picksy
                 MessageBox.Show($"Error loading icon or logo: {ex.Message}", "Picksy Error");
             }
             UpdateMainPageControlsPosition();
+
+            // Initialize custom progress bars
+            InitializeCustomProgressBars();
+
+            // Initialize hover timer
+            hoverTimer.Interval = 15; // milliseconds per step
+            hoverTimer.Tick += HoverTimer_Tick;
+
+            // Set up hover effect for buttons
+            SetupButtonHover(selectFolderButton);
+            SetupButtonHover(rotateClockwiseButton);
+            SetupButtonHover(rotateCounterclockwiseButton);
+            SetupButtonHover(saveAndQuitButton);
+        }
+
+        private void SetupButtonHover(Button button)
+        {
+            button.BackColor = baseColor;
+            button.UseVisualStyleBackColor = false;
+            button.MouseEnter += (s, e) =>
+            {
+                if (currentButton != button)
+                {
+                    hoverTimer.Stop();
+                    currentStep = 0;
+                    currentButton = button;
+                }
+                isHovering = true;
+                hoverTimer.Start();
+            };
+            button.MouseLeave += (s, e) =>
+            {
+                if (currentButton == button)
+                {
+                    isHovering = false;
+                    currentStep = 0;
+                    hoverTimer.Start();
+                }
+            };
+        }
+
+        private void HoverTimer_Tick(object sender, EventArgs e)
+        {
+            if (currentButton == null)
+            {
+                hoverTimer.Stop();
+                return;
+            }
+
+            currentStep++;
+            float t = currentStep / (float)transitionSteps;
+
+            Color startColor = isHovering ? baseColor : hoverColor;
+            Color endColor = isHovering ? hoverColor : baseColor;
+
+            int r = (int)(startColor.R + (endColor.R - startColor.R) * t);
+            int g = (int)(startColor.G + (endColor.G - startColor.G) * t);
+            int b = (int)(startColor.B + (endColor.B - startColor.B) * t);
+
+            currentButton.BackColor = Color.FromArgb(r, g, b);
+
+            if (currentStep >= transitionSteps)
+            {
+                hoverTimer.Stop();
+            }
+        }
+
+        private void InitializeCustomProgressBars()
+        {
+            // Seen progress (gray)
+            seenProgressContainer = new Panel
+            {
+                BackColor = Color.FromArgb(36, 36, 36), // Dark gray background
+                Size = new Size(560, 10),
+                Location = new Point(220, 740), // Initial position
+                Visible = false // Hide initially
+            };
+            seenProgressBar = new Panel
+            {
+                BackColor = Color.FromArgb(150, 150, 150), // Gray color
+                Size = new Size(0, 10), // Starts empty
+                Location = new Point(0, 0)
+            };
+            seenProgressContainer.Controls.Add(seenProgressBar);
+            this.Controls.Add(seenProgressContainer);
+
+            // Re-seen progress (blue)
+            reseenProgressContainer = new Panel
+            {
+                BackColor = Color.FromArgb(150, 150, 150), // Match seen bar’s progress color
+                Size = new Size(560, 10),
+                Location = new Point(220, 740), // Same position as seen bar
+                Visible = false // Hide initially
+            };
+            reseenProgressBar = new Panel
+            {
+                BackColor = Color.FromArgb(6, 148, 148), // Blue color
+                Size = new Size(0, 10),
+                Location = new Point(0, 0)
+            };
+            reseenProgressContainer.Controls.Add(reseenProgressBar);
+            this.Controls.Add(reseenProgressContainer);
+            reseenProgressContainer.BringToFront(); // Ensure re-seen bar is on top
+        }
+
+        private int GetExifOrientation(Image image)
+        {
+            try
+            {
+                if (image.PropertyIdList.Contains(0x0112))
+                {
+                    var prop = image.GetPropertyItem(0x0112);
+                    if (prop != null && prop.Value.Length >= 2)
+                    {
+                        return BitConverter.ToInt16(prop.Value, 0);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error reading EXIF orientation: {ex.Message}");
+            }
+            return 1; // Default to normal orientation
+        }
+
+        private int ExifOrientationToDegrees(int orientation)
+        {
+            switch (orientation)
+            {
+                case 1: return 0;    // Normal
+                case 3: return 180;  // Rotated 180
+                case 6: return 90;   // Rotated 90 CW
+                case 8: return 270;  // Rotated 90 CCW
+                default: return 0;   // Includes mirroring cases (2, 4, 5, 7)
+            }
         }
 
         private void SelectFolderButton_Click(object sender, EventArgs e)
@@ -432,6 +585,9 @@ namespace Picksy
             }
 
             currentBatch = new List<string>(batch);
+            initialBatchSize = batch.Count; // Store initial batch size for progress bar
+            seenPhotos.Clear(); // Reset seen photos
+            reseenPhotos.Clear(); // Reset reseen photos
             if (remainingPhotos == null || remainingPhotos.Count == 0) // Only set if not loaded from state or empty
             {
                 remainingPhotos = new List<string>(batch);
@@ -466,17 +622,30 @@ namespace Picksy
             saveAndQuitButton.Visible = true;
             remainingLabel.Visible = true;
             instructionLabel.Visible = true;
+            batchProgressLabel.Visible = true; // Show batch progress label
+            seenProgressContainer.Visible = true; // Show seen progress bar
+            reseenProgressContainer.Visible = false; // Hide reseen progress bar initially
+            seenProgressBar.Width = 0; // Reset seen progress
+            reseenProgressBar.Width = 0; // Reset reseen progress
             UpdateTournamentUI();
         }
 
         private void UpdateTournamentUI()
         {
-            if (remainingPhotos == null || remainingPhotos.Count == 0)
+            if (remainingPhotos == null)
+            {
+                ShowResults();
+                return;
+            }
+            if (remainingPhotos.Count == 0)
             {
                 if (!skipConfirmationCheckBox.Checked)
                 {
                     MessageBox.Show("Tournament ended. No photos left.", "Picksy");
                 }
+                seenProgressBar.Width = seenProgressContainer.Width; // Set to 100%
+                reseenProgressContainer.Visible = false; // Hide reseen bar
+                batchProgressLabel.Text = "Batch Progress: 100% Seen";
                 ShowResults();
                 return;
             }
@@ -486,6 +655,9 @@ namespace Picksy
                 {
                     MessageBox.Show($"Tournament ended. Winner: {Path.GetFileName(remainingPhotos[0])}", "Picksy");
                 }
+                seenProgressBar.Width = seenProgressContainer.Width; // Set to 100%
+                reseenProgressContainer.Visible = false; // Hide reseen bar
+                batchProgressLabel.Text = "Batch Progress: 100% Seen";
                 ShowResults();
                 return;
             }
@@ -494,6 +666,26 @@ namespace Picksy
                 // Shuffle remaining photos for next round
                 remainingPhotos = Shuffle(remainingPhotos);
                 currentPairIndex = 0;
+            }
+
+            // Mark current pair as seen or reseen
+            bool allSeen = seenPhotos.Count == initialBatchSize;
+            if (remainingPhotos.Count > currentPairIndex)
+            {
+                seenPhotos.Add(remainingPhotos[currentPairIndex]);
+                if (allSeen)
+                {
+                    reseenProgressContainer.Visible = true;
+                    reseenPhotos.Add(remainingPhotos[currentPairIndex]);
+                }
+            }
+            if (remainingPhotos.Count > currentPairIndex + 1)
+            {
+                seenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
+                if (allSeen)
+                {
+                    reseenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
+                }
             }
 
             // Load two photos with rotation
@@ -505,30 +697,71 @@ namespace Picksy
             Image? rightImage = null;
             try
             {
-                leftImage = Image.FromFile(remainingPhotos[currentPairIndex]);
-                rightImage = Image.FromFile(remainingPhotos[currentPairIndex + 1]);
-                int leftRotation = photoRotations[remainingPhotos[currentPairIndex]];
-                int rightRotation = photoRotations[remainingPhotos[currentPairIndex + 1]];
+                if (remainingPhotos.Count > currentPairIndex)
+                    leftImage = Image.FromFile(remainingPhotos[currentPairIndex]);
+                if (remainingPhotos.Count > currentPairIndex + 1)
+                    rightImage = Image.FromFile(remainingPhotos[currentPairIndex + 1]);
+
+                // Get EXIF and manual rotations
+                int leftExifRotation = remainingPhotos.Count > currentPairIndex ? GetExifOrientation(leftImage) : 1;
+                int rightExifRotation = remainingPhotos.Count > currentPairIndex + 1 ? GetExifOrientation(rightImage) : 1;
+                int leftManualRotation = remainingPhotos.Count > currentPairIndex ? photoRotations[remainingPhotos[currentPairIndex]] : 0;
+                int rightManualRotation = remainingPhotos.Count > currentPairIndex + 1 ? photoRotations[remainingPhotos[currentPairIndex + 1]] : 0;
+
+                // Convert EXIF orientation to degrees
+                int leftExifDegrees = ExifOrientationToDegrees(leftExifRotation);
+                int rightExifDegrees = ExifOrientationToDegrees(rightExifRotation);
+
+                // Combine EXIF and manual rotations
+                int leftTotalRotation = (leftExifDegrees + leftManualRotation) % 360;
+                int rightTotalRotation = (rightExifDegrees + rightManualRotation) % 360;
+
                 if (showFullResolution)
                 {
-                    pictureBoxLeft.Image = RotateImage(leftImage, leftRotation);
-                    pictureBoxRight.Image = RotateImage(rightImage, rightRotation);
+                    if (leftImage != null)
+                        pictureBoxLeft.Image = RotateImage(leftImage, leftTotalRotation);
+                    if (rightImage != null)
+                        pictureBoxRight.Image = RotateImage(rightImage, rightTotalRotation);
                 }
                 else
                 {
                     // Load thumbnails for performance
-                    pictureBoxLeft.Image = CreateThumbnail(leftImage, leftRotation);
-                    pictureBoxRight.Image = CreateThumbnail(rightImage, rightRotation);
+                    if (leftImage != null)
+                        pictureBoxLeft.Image = CreateThumbnail(leftImage, leftTotalRotation);
+                    if (rightImage != null)
+                        pictureBoxRight.Image = CreateThumbnail(rightImage, rightTotalRotation);
                 }
                 // Set tooltips with filenames
-                toolTipLeft.SetToolTip(pictureBoxLeft, Path.GetFileName(remainingPhotos[currentPairIndex]));
-                toolTipRight.SetToolTip(pictureBoxRight, Path.GetFileName(remainingPhotos[currentPairIndex + 1]));
+                if (remainingPhotos.Count > currentPairIndex)
+                    toolTipLeft.SetToolTip(pictureBoxLeft, Path.GetFileName(remainingPhotos[currentPairIndex]));
+                if (remainingPhotos.Count > currentPairIndex + 1)
+                    toolTipRight.SetToolTip(pictureBoxRight, Path.GetFileName(remainingPhotos[currentPairIndex + 1]));
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error loading images: {ex.Message}. Skipping this pair.", "Picksy Error");
-                remainingPhotos.RemoveAt(currentPairIndex + 1);
-                remainingPhotos.RemoveAt(currentPairIndex);
+                if (remainingPhotos.Count > 1)
+                {
+                    if (remainingPhotos.Count > currentPairIndex)
+                        seenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                    if (remainingPhotos.Count > currentPairIndex + 1)
+                        seenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
+                    if (allSeen)
+                    {
+                        if (remainingPhotos.Count > currentPairIndex)
+                            reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                        if (remainingPhotos.Count > currentPairIndex + 1)
+                            reseenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
+                    }
+                    if (remainingPhotos.Count > currentPairIndex + 1)
+                        remainingPhotos.RemoveAt(currentPairIndex + 1);
+                    if (remainingPhotos.Count > currentPairIndex)
+                        remainingPhotos.RemoveAt(currentPairIndex);
+                }
+                else if (remainingPhotos.Count == 1)
+                {
+                    remainingPhotos.Clear();
+                }
                 leftImage?.Dispose();
                 rightImage?.Dispose();
                 UpdateTournamentUI();
@@ -543,6 +776,29 @@ namespace Picksy
             // Update remaining photos and batches display
             int batchesRemaining = (batches != null && batches.Count > currentBatchIndex) ? batches.Count - currentBatchIndex - 1 : 0;
             remainingLabel.Text = $"Photos remaining: {remainingPhotos.Count} | Batches remaining: {batchesRemaining}";
+
+            // Calculate seen percentage
+            int seenPercentage = (initialBatchSize > 0) ? Math.Min((seenPhotos.Count * 100) / initialBatchSize, 100) : 100;
+            int seenWidth = (int)(seenPercentage / 100.0 * seenProgressContainer.Width);
+            seenProgressBar.Width = Math.Min(seenWidth, seenProgressContainer.Width);
+
+            // Handle re-viewed progress
+            if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count > 0)
+            {
+                reseenProgressContainer.Visible = true;
+                int reseenPercentage = (remainingPhotos.Count > 0) ? (reseenPhotos.Count * 100) / remainingPhotos.Count : 0;
+                int reseenWidth = (int)(reseenPercentage / 100.0 * reseenProgressContainer.Width);
+                reseenProgressBar.Width = Math.Min(reseenWidth, reseenProgressContainer.Width);
+                batchProgressLabel.Text = $"All Photos Viewed! - {reseenPercentage}% Re-Viewed" + 
+                                         (reseenPercentage > 99 ? " (Press Enter to Keep All)" : "");
+            }
+            else
+            {
+                reseenProgressContainer.Visible = false;
+                reseenProgressBar.Width = 0;
+                batchProgressLabel.Text = $"Batch Progress: {seenPercentage}% Viewed";
+            }
+
             UpdatePictureBoxSizes();
         }
 
@@ -602,8 +858,8 @@ namespace Picksy
 
         private void UpdatePictureBoxSizes()
         {
-            // Calculate available space, accounting for menu strip, buttons, and labels
-            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - copyrightLabel.Height - 80; // Increased padding, account for copyrightLabel
+            // Calculate available space, accounting for menu strip, buttons, labels, and progress bars
+            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - batchProgressLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - copyrightLabel.Height - seenProgressContainer.Height - reseenProgressContainer.Height - 100; // Adjusted for label and progress bar
             int availableWidth = (ClientSize.Width - 40) / 2; // Increased side padding to 20 per side
 
             // Set PictureBox size to fit images without cropping
@@ -616,9 +872,16 @@ namespace Picksy
             rotateClockwiseButton.Location = new Point(20, pictureBoxLeft.Bottom + 10); // Increased gap
             rotateCounterclockwiseButton.Location = new Point(ClientSize.Width - rotateCounterclockwiseButton.Width - 20, pictureBoxLeft.Bottom + 10);
             saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, pictureBoxLeft.Bottom + 10);
-            remainingLabel.Location = new Point(20, saveAndQuitButton.Bottom + 15); // Increased gap
-            instructionLabel.Location = new Point(20, remainingLabel.Bottom + 15);
-            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, instructionLabel.Bottom + 15); // Centered horizontally
+            remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, saveAndQuitButton.Bottom + 15); // Center horizontally
+            instructionLabel.Location = new Point((ClientSize.Width - instructionLabel.Width) / 2, remainingLabel.Bottom + 15); // Center horizontally
+
+            // Position progress bars and label
+            int progressBarX = (ClientSize.Width - seenProgressContainer.Width) / 2;
+            seenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25);
+            reseenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25); // Overlap with seen bar
+            batchProgressLabel.Location = new Point(progressBarX, instructionLabel.Bottom + 5); // Align left with progress bars, above them
+
+            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, reseenProgressContainer.Bottom + 15);
             thumbnailPanel.Location = new Point(20, menuStrip.Height + 20);
             deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 20); // Increased gap
         }
@@ -785,7 +1048,7 @@ namespace Picksy
                     UndoLastAction();
                     return true;
                 }
-                else if (keyData == Keys.Space)
+                else if (keyData == Keys.Enter)
                 {
                     EndTournament();
                     return true;
@@ -816,7 +1079,7 @@ namespace Picksy
                     UpdateTournamentUI();
                     return true;
                 }
-                else if (keyData == Keys.Delete)
+                else if (keyData == Keys.Space)
                 {
                     if (currentBatch == null) return true;
                     var result = MessageBox.Show("Delete all photos in this batch?", "Confirm Batch Deletion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
@@ -868,7 +1131,15 @@ namespace Picksy
         {
             if (remainingPhotos == null) return;
 
-            // Keep both photos, advance to next pair
+            // Keep both photos, mark them as seen, advance to next pair
+            bool allSeen = seenPhotos.Count == initialBatchSize;
+            seenPhotos.Add(remainingPhotos[currentPairIndex]);
+            seenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
+            if (allSeen)
+            {
+                reseenPhotos.Add(remainingPhotos[currentPairIndex]);
+                reseenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
+            }
             history.Push((null, true));
             currentPairIndex += 2;
             UpdateTournamentUI();
@@ -906,12 +1177,43 @@ namespace Picksy
                 {
                     currentPairIndex = 0;
                 }
+                // Remove from reseenPhotos if applicable
+                if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count >= 2)
+                {
+                    reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                    reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
+                    reseenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
+                }
+                // Remove from seenPhotos
+                seenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                seenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
             }
             else if (lastAction.Loser != null)
             {
                 // Restore the loser
                 losers?.Remove(lastAction.Loser);
                 remainingPhotos.Insert(currentPairIndex + 1, lastAction.Loser);
+                // Remove the winner from seenPhotos if it was added
+                if (seenPhotos.Contains(remainingPhotos[currentPairIndex]))
+                {
+                    seenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                }
+                // Remove the loser from seenPhotos if it was added
+                if (seenPhotos.Contains(lastAction.Loser))
+                {
+                    seenPhotos.Remove(lastAction.Loser);
+                }
+                // Remove from reseenPhotos if applicable
+                if (reseenPhotos.Contains(remainingPhotos[currentPairIndex]))
+                {
+                    reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
+                    reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                }
+                if (reseenPhotos.Contains(lastAction.Loser))
+                {
+                    reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
+                    reseenPhotos.Remove(lastAction.Loser);
+                }
             }
 
             UpdateTournamentUI();
@@ -943,6 +1245,9 @@ namespace Picksy
             saveAndQuitButton.Visible = false;
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
+            batchProgressLabel.Visible = false; // Hide batch progress label
+            seenProgressContainer.Visible = false; // Hide seen progress bar
+            reseenProgressContainer.Visible = false; // Hide reseen progress bar
 
             // Show thumbnails
             ClearThumbnails();
@@ -1151,11 +1456,12 @@ namespace Picksy
                         Text = "Support Picksy", // Full text
                         Size = new Size(160, 60), // Larger button size
                         Location = new Point(90, 330),
-                        BackColor = Color.FromArgb(26, 26, 26),
+                        BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
                         UseVisualStyleBackColor = false
                     };
+                    SetupButtonHover(coffeeButton); // Apply hover effect
                     coffeeButton.Click += (s, e) =>
                     {
                         try
@@ -1173,11 +1479,12 @@ namespace Picksy
                         Text = "Share Picksy", // Full text
                         Size = new Size(160, 60), // Larger button size
                         Location = new Point(270, 330),
-                        BackColor = Color.FromArgb(26, 26, 26),
+                        BackColor = baseColor,
                         ForeColor = Color.White,
-                        Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
+                        Font = new System.Drawing.Font("Montserrat SemiBold", 12F, System.Drawing.FontStyle.Regular),
                         UseVisualStyleBackColor = false
                     };
+                    SetupButtonHover(shareButton); // Apply hover effect
                     shareButton.Click += (s, e) =>
                     {
                         try
@@ -1198,11 +1505,12 @@ namespace Picksy
                         Text = "Close",
                         Size = new Size(160, 60), // Larger button size
                         Location = new Point(450, 330),
-                        BackColor = Color.FromArgb(26, 26, 26),
+                        BackColor = baseColor,
                         ForeColor = Color.White,
-                        Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
+                        Font = new System.Drawing.Font("Montserrat SemiBold", 12F, System.Drawing.FontStyle.Regular),
                         UseVisualStyleBackColor = false
                     };
+                    SetupButtonHover(closeButton); // Apply hover effect
                     closeButton.Click += (s, e) => form.Close();
 
                     // Add controls to form
@@ -1238,10 +1546,16 @@ namespace Picksy
             deletePromptLabel.Visible = false;
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
+            batchProgressLabel.Visible = false; // Hide batch progress label
+            seenProgressContainer.Visible = false; // Hide seen progress bar
+            reseenProgressContainer.Visible = false; // Hide reseen progress bar
             currentBatch = null;
             remainingPhotos = null;
             losers = null;
             history.Clear();
+            seenPhotos.Clear(); // Reset seen photos
+            reseenPhotos.Clear(); // Reset reseen photos
+            initialBatchSize = 0; // Reset initial batch size
             // Preserve batches and currentFolderPath for next batch
             ClearThumbnails();
             UpdateMainPageControlsPosition();
