@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Diagnostics;
 using System.Web;
+using System.Drawing.Imaging;
 
 namespace Picksy
 {
@@ -46,6 +47,14 @@ namespace Picksy
         private int currentStep = 0;
         private Button? currentButton;
 
+        // Animation fields
+        private System.Windows.Forms.Timer selectedPhotoTimer; // Explicitly use Windows Forms Timer
+        private System.Windows.Forms.Timer nonSelectedPhotoTimer; // Explicitly use Windows Forms Timer
+        private PictureBox? animatedSelectedBox; // Track which PictureBox is being animated
+        private PictureBox? animatedNonSelectedBox;
+        private Size originalSize; // Store original PictureBox size for animation
+        private Image? originalNonSelectedImage; // Store original image for grayscale revert
+
         public MainForm()
         {
             InitializeComponent();
@@ -70,7 +79,7 @@ namespace Picksy
             selectFolderButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
-            selectFolderButton.BringToFront(); // Ensure button is on top
+            selectFolderButton.BringToFront();
             try
             {
                 this.Icon = new Icon("Resources\\logo.ico");
@@ -88,6 +97,12 @@ namespace Picksy
             // Initialize hover timer
             hoverTimer.Interval = 15; // milliseconds per step
             hoverTimer.Tick += HoverTimer_Tick;
+
+            // Initialize animation timers
+            selectedPhotoTimer = new System.Windows.Forms.Timer { Interval = 50 }; // 50ms duration
+            selectedPhotoTimer.Tick += SelectedPhotoTimer_Tick;
+            nonSelectedPhotoTimer = new System.Windows.Forms.Timer { Interval = 50 };
+            nonSelectedPhotoTimer.Tick += NonSelectedPhotoTimer_Tick;
 
             // Set up hover effect for buttons
             SetupButtonHover(selectFolderButton);
@@ -216,6 +231,52 @@ namespace Picksy
                 case 8: return 270;  // Rotated 90 CCW
                 default: return 0;   // Includes mirroring cases (2, 4, 5, 7)
             }
+        }
+
+        private void SelectedPhotoTimer_Tick(object sender, EventArgs e)
+        {
+            selectedPhotoTimer.Stop();
+            if (animatedSelectedBox != null)
+            {
+                animatedSelectedBox.Size = originalSize;
+                animatedSelectedBox = null;
+            }
+            UpdateTournamentUI(); // Proceed after animation
+        }
+
+        private void NonSelectedPhotoTimer_Tick(object sender, EventArgs e)
+        {
+            nonSelectedPhotoTimer.Stop();
+            if (animatedNonSelectedBox != null && originalNonSelectedImage != null)
+            {
+                animatedNonSelectedBox.Image?.Dispose();
+                animatedNonSelectedBox.Image = originalNonSelectedImage;
+                originalNonSelectedImage = null;
+                animatedNonSelectedBox = null;
+            }
+        }
+
+        private Image ApplyGrayscale(Image original)
+        {
+            Bitmap grayscale = new Bitmap(original.Width, original.Height);
+            using (Graphics g = Graphics.FromImage(grayscale))
+            {
+                ColorMatrix colorMatrix = new ColorMatrix(new float[][]
+                {
+                    new float[] { 0.299f, 0.299f, 0.299f, 0, 0 },
+                    new float[] { 0.587f, 0.587f, 0.587f, 0, 0 },
+                    new float[] { 0.114f, 0.114f, 0.114f, 0, 0 },
+                    new float[] { 0, 0, 0, 0.1f, 0 }, // Alpha set to 0.5 for 50% transparency
+                    new float[] { 0, 0, 0, 0, 1 }
+                });
+                using (ImageAttributes attributes = new ImageAttributes())
+                {
+                    attributes.SetColorMatrix(colorMatrix);
+                    g.DrawImage(original, new Rectangle(0, 0, original.Width, original.Height), 
+                                0, 0, original.Width, original.Height, GraphicsUnit.Pixel, attributes);
+                }
+            }
+            return grayscale;
         }
 
         private void SelectFolderButton_Click(object sender, EventArgs e)
@@ -1123,8 +1184,38 @@ namespace Picksy
             history.Push((loser, false));
             currentPairIndex = winnerIndex;
 
-            // Advance to next pair
-            UpdateTournamentUI();
+            // Apply animations if not skipped
+            if (!skipAnimationsCheckBox.Checked)
+            {
+                PictureBox selectedBox = leftSelected ? pictureBoxLeft : pictureBoxRight;
+                PictureBox nonSelectedBox = leftSelected ? pictureBoxRight : pictureBoxLeft;
+
+                // Selected photo: expand slightly
+                animatedSelectedBox = selectedBox;
+                originalSize = selectedBox.Size;
+                int newWidth = (int)(originalSize.Width * 1);
+                int newHeight = (int)(originalSize.Height * 1);
+                selectedBox.Size = new Size(newWidth, newHeight);
+                selectedBox.Location = new Point(
+                    selectedBox.Location.X - (newWidth - originalSize.Width) / 2,
+                    selectedBox.Location.Y - (newHeight - originalSize.Height) / 2);
+
+                // Non-selected photo: grayscale
+                animatedNonSelectedBox = nonSelectedBox;
+                if (nonSelectedBox.Image != null)
+                {
+                    originalNonSelectedImage = nonSelectedBox.Image;
+                    nonSelectedBox.Image = ApplyGrayscale(originalNonSelectedImage);
+                }
+
+                // Start animation timers
+                selectedPhotoTimer.Start();
+                nonSelectedPhotoTimer.Start();
+            }
+            else
+            {
+                UpdateTournamentUI(); // Proceed immediately if animations are skipped
+            }
         }
 
         private void KeepBothPhotos()
