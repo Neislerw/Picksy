@@ -2,17 +2,31 @@
 {
     partial class MainForm
     {
+        /// <summary>
+        /// Required designer variable.
+        /// </summary>
         private System.ComponentModel.IContainer components = null;
 
+        /// <summary>
+        /// Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
             {
                 components.Dispose();
+                hoverTimer?.Dispose();
             }
             base.Dispose(disposing);
         }
 
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        /// Required method for Designer support - do not modify
+        /// the contents of this method with the code editor.
+        /// </summary>
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
@@ -43,11 +57,13 @@
             this.toolTipRight = new System.Windows.Forms.ToolTip(this.components);
             this.saveAndQuitButton = new System.Windows.Forms.Button();
             this.copyrightLabel = new System.Windows.Forms.Label();
+            this.batchProgressLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).BeginInit();
             this.thumbnailPanel.SuspendLayout();
             this.menuStrip.SuspendLayout();
             this.settingsGroupBox.SuspendLayout();
+            this.hoverTimer = new System.Windows.Forms.Timer(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.batchSizeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).BeginInit();
@@ -107,7 +123,7 @@
             this.instructionLabel.Name = "instructionLabel";
             this.instructionLabel.Size = new System.Drawing.Size(960, 80);
             this.instructionLabel.TabIndex = 4;
-            this.instructionLabel.Text = "Click or use Left/Right to select, Up to keep both, Down to undo, Q/E to rotate, W to toggle resolution, Del to delete batch, Space to keep all.";
+            this.instructionLabel.Text = "Controls: Click or use Left/Right to select, Up to keep both, Down to undo, Q/E to rotate, W to toggle full resolution, Space to delete all, Enter to keep all.";
             this.instructionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // thumbnailPanel
@@ -227,6 +243,7 @@
             this.skipConfirmationCheckBox.TabIndex = 7;
             this.skipConfirmationCheckBox.Text = "Skip Confirmation between batches";
             this.skipConfirmationCheckBox.UseVisualStyleBackColor = true;
+            this.skipConfirmationCheckBox.Checked = true;
             // 
             // batchTimingDescriptionLabel
             // 
@@ -361,7 +378,7 @@
             // 
             this.copyrightLabel.AutoSize = true;
             this.copyrightLabel.Font = new System.Drawing.Font("Montserrat SemiBold", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.copyrightLabel.ForeColor = System.Drawing.Color.Gray;
+            this.copyrightLabel.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(56)))), ((int)(((byte)(56)))), ((int)(((byte)(56)))));
             this.copyrightLabel.Location = new System.Drawing.Point(425, 770);
             this.copyrightLabel.Name = "copyrightLabel";
             this.copyrightLabel.Size = new System.Drawing.Size(150, 16);
@@ -369,11 +386,24 @@
             this.copyrightLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.copyrightLabel.Text = "\u00A9 2025 W.A. Neisler";
             // 
+            // batchProgressLabel
+            // 
+            this.batchProgressLabel.AutoSize = false;
+            this.batchProgressLabel.Font = new System.Drawing.Font("Montserrat SemiBold", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.batchProgressLabel.ForeColor = System.Drawing.Color.Gray;
+            this.batchProgressLabel.Location = new System.Drawing.Point(220, 730);
+            this.batchProgressLabel.Name = "batchProgressLabel";
+            this.batchProgressLabel.Size = new System.Drawing.Size(400, 16);
+            this.batchProgressLabel.TabIndex = 22;
+            this.batchProgressLabel.Text = "Batch Progress: 0% Viewed";
+            this.batchProgressLabel.Visible = false;
+            // 
             // MainForm
             // 
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(26)))));
             this.ClientSize = new System.Drawing.Size(1000, 800);
+            this.Controls.Add(this.batchProgressLabel);
             this.Controls.Add(this.copyrightLabel);
             this.Controls.Add(this.saveAndQuitButton);
             this.Controls.Add(this.logoPictureBox);
@@ -407,6 +437,8 @@
             this.PerformLayout();
         }
 
+        #endregion
+
         private System.Windows.Forms.Button selectFolderButton;
         private System.Windows.Forms.PictureBox pictureBoxLeft;
         private System.Windows.Forms.PictureBox pictureBoxRight;
@@ -418,6 +450,8 @@
         private System.Windows.Forms.Button rotateCounterclockwiseButton;
         private System.Windows.Forms.Label deletePromptLabel;
         private System.Windows.Forms.GroupBox settingsGroupBox;
+        private System.Windows.Forms.ComboBox batchSelectionMethodComboBox;
+        private System.Windows.Forms.Label batchSelectionMethodLabel;
         private System.Windows.Forms.CheckBox skipConfirmationCheckBox;
         private System.Windows.Forms.Label batchTimingDescriptionLabel;
         private System.Windows.Forms.Label batchSizeDescriptionLabel;
@@ -428,11 +462,11 @@
         private System.Windows.Forms.Label batchSizeLabel;
         private System.Windows.Forms.Label settingsHeaderLabel;
         private System.Windows.Forms.PictureBox logoPictureBox;
-        private System.Windows.Forms.ComboBox batchSelectionMethodComboBox;
-        private System.Windows.Forms.Label batchSelectionMethodLabel;
         private System.Windows.Forms.ToolTip toolTipLeft;
         private System.Windows.Forms.ToolTip toolTipRight;
         private System.Windows.Forms.Button saveAndQuitButton;
         private System.Windows.Forms.Label copyrightLabel;
+        private System.Windows.Forms.Label batchProgressLabel;
+        private System.Windows.Forms.Timer hoverTimer;
     }
 }
