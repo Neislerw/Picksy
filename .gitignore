@@ -4,6 +4,7 @@ obj/
 *.user
 *.sln.docstates
 *.csproj.user
+picksy_grouper.log
 
 # NuGet
 packages/
