@@ -1,3 +1,0 @@
-  Lets also revamp the Auto-mode.
-
-I think Auto should first try to make batches using dated file names (ie 20241221_115518.jpg), once it has made as many of those batches, it should look at remaining photos and try Date Taken, if there is no Date Taken, then it should try Date Created.
