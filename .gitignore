@@ -16,4 +16,4 @@ Resources/*.png
 !Resources/logo.png
 !Resources/logo-light.png
 !Resources/logo.ico
-Published/*
+published/*.exe
