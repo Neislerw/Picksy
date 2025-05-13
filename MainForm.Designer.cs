@@ -216,10 +216,10 @@
             this.skipAnimationsCheckBox.AutoSize = true;
             this.skipAnimationsCheckBox.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.skipAnimationsCheckBox.ForeColor = System.Drawing.Color.White;
-            this.skipAnimationsCheckBox.Location = new System.Drawing.Point(30, 370);
+            this.skipAnimationsCheckBox.Location = new System.Drawing.Point(30, 265);
             this.skipAnimationsCheckBox.Name = "skipAnimationsCheckBox";
             this.skipAnimationsCheckBox.Size = new System.Drawing.Size(200, 26);
-            this.skipAnimationsCheckBox.TabIndex = 10;
+            this.skipAnimationsCheckBox.TabIndex = 6;
             this.skipAnimationsCheckBox.Text = "Skip Animations";
             this.skipAnimationsCheckBox.UseVisualStyleBackColor = true;
             // 
@@ -230,17 +230,17 @@
             this.batchSelectionMethodComboBox.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.batchSelectionMethodComboBox.ForeColor = System.Drawing.Color.White;
             this.batchSelectionMethodComboBox.FormattingEnabled = true;
-            this.batchSelectionMethodComboBox.Location = new System.Drawing.Point(330, 340);
+            this.batchSelectionMethodComboBox.Location = new System.Drawing.Point(330, 365);
             this.batchSelectionMethodComboBox.Name = "batchSelectionMethodComboBox";
             this.batchSelectionMethodComboBox.Size = new System.Drawing.Size(200, 28);
-            this.batchSelectionMethodComboBox.TabIndex = 9;
+            this.batchSelectionMethodComboBox.TabIndex = 8;
             // 
             // batchSelectionMethodLabel
             // 
             this.batchSelectionMethodLabel.AutoSize = true;
             this.batchSelectionMethodLabel.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.batchSelectionMethodLabel.ForeColor = System.Drawing.Color.White;
-            this.batchSelectionMethodLabel.Location = new System.Drawing.Point(30, 340);
+            this.batchSelectionMethodLabel.Location = new System.Drawing.Point(30, 365);
             this.batchSelectionMethodLabel.Name = "batchSelectionMethodLabel";
             this.batchSelectionMethodLabel.Size = new System.Drawing.Size(200, 26);
             this.batchSelectionMethodLabel.TabIndex = 8;
@@ -289,7 +289,7 @@
             this.includeSubfoldersCheckBox.Location = new System.Drawing.Point(30, 240);
             this.includeSubfoldersCheckBox.Name = "includeSubfoldersCheckBox";
             this.includeSubfoldersCheckBox.Size = new System.Drawing.Size(200, 26);
-            this.includeSubfoldersCheckBox.TabIndex = 4;
+            this.includeSubfoldersCheckBox.TabIndex = 5;
             this.includeSubfoldersCheckBox.Text = "Include Subfolders";
             this.includeSubfoldersCheckBox.UseVisualStyleBackColor = true;
             // 
@@ -407,7 +407,7 @@
             this.batchProgressLabel.ForeColor = System.Drawing.Color.Gray;
             this.batchProgressLabel.Location = new System.Drawing.Point(220, 730);
             this.batchProgressLabel.Name = "batchProgressLabel";
-            this.batchProgressLabel.Size = new System.Drawing.Size(300, 16); // Increased width to prevent text cutoff
+            this.batchProgressLabel.Size = new System.Drawing.Size(300, 16);
             this.batchProgressLabel.TabIndex = 22;
             this.batchProgressLabel.Text = "Batch Progress: 0% Seen";
             this.batchProgressLabel.Visible = false;

@@ -34,10 +34,10 @@ namespace Picksy
         private HashSet<string> reseenPhotos = new HashSet<string>(); // Track reseen photos
 
         // Custom progress panels
-        private Panel seenProgressContainer;
-        private Panel seenProgressBar;
-        private Panel reseenProgressContainer;
-        private Panel reseenProgressBar;
+        private Panel? seenProgressContainer;
+        private Panel? seenProgressBar;
+        private Panel? reseenProgressContainer;
+        private Panel? reseenProgressBar;
 
         // Hover effect fields
         private bool isHovering = false;
@@ -48,12 +48,19 @@ namespace Picksy
         private Button? currentButton;
 
         // Animation fields
-        private System.Windows.Forms.Timer selectedPhotoTimer; // Explicitly use Windows Forms Timer
-        private System.Windows.Forms.Timer nonSelectedPhotoTimer; // Explicitly use Windows Forms Timer
-        private PictureBox? animatedSelectedBox; // Track which PictureBox is being animated
-        private PictureBox? animatedNonSelectedBox;
-        private Size originalSize; // Store original PictureBox size for animation
-        private Image? originalNonSelectedImage; // Store original image for grayscale revert
+        private System.Windows.Forms.Timer selectedOverlayTimer; // Timer for white overlay fade
+        private System.Windows.Forms.Timer nonSelectedOverlayTimer; // Timer for black overlay fade
+        private Panel? selectedOverlayLeft; // White overlay for left PictureBox
+        private Panel? selectedOverlayRight; // White overlay for right PictureBox
+        private Panel? nonSelectedOverlay; // Black overlay for non-selected PictureBox
+        private float selectedOverlayOpacity; // Current opacity for white overlay
+        private float nonSelectedOverlayOpacity; // Current opacity for black overlay
+        private bool isKeepBothAnimation; // Flag for KeepBothPhotos animation
+        private PictureBox? nonSelectedBox; // Track non-selected PictureBox for hiding
+        private bool isAnimating; // Prevent overlapping animations
+        private int selectedAnimationStep; // Step counter for selected overlay
+        private int nonSelectedAnimationStep; // Step counter for non-selected overlay
+        private bool animationsCompleted; // Track when both animations are done
 
         public MainForm()
         {
@@ -99,10 +106,10 @@ namespace Picksy
             hoverTimer.Tick += HoverTimer_Tick;
 
             // Initialize animation timers
-            selectedPhotoTimer = new System.Windows.Forms.Timer { Interval = 50 }; // 50ms duration
-            selectedPhotoTimer.Tick += SelectedPhotoTimer_Tick;
-            nonSelectedPhotoTimer = new System.Windows.Forms.Timer { Interval = 50 };
-            nonSelectedPhotoTimer.Tick += NonSelectedPhotoTimer_Tick;
+            selectedOverlayTimer = new System.Windows.Forms.Timer { Interval = 5 }; // 5ms for fine-grained control
+            selectedOverlayTimer.Tick += SelectedOverlayTimer_Tick;
+            nonSelectedOverlayTimer = new System.Windows.Forms.Timer { Interval = 5 };
+            nonSelectedOverlayTimer.Tick += NonSelectedOverlayTimer_Tick;
 
             // Set up hover effect for buttons
             SetupButtonHover(selectFolderButton);
@@ -137,9 +144,9 @@ namespace Picksy
             };
         }
 
-        private void HoverTimer_Tick(object sender, EventArgs e)
+        private void HoverTimer_Tick(object? sender, EventArgs e)
         {
-            if (currentButton == null)
+            if (sender is null || currentButton == null)
             {
                 hoverTimer.Stop();
                 return;
@@ -201,8 +208,11 @@ namespace Picksy
             reseenProgressContainer.BringToFront(); // Ensure re-seen bar is on top
         }
 
-        private int GetExifOrientation(Image image)
+        private int GetExifOrientation(Image? image)
         {
+            if (image == null)
+                return 1; // Default to normal orientation
+
             try
             {
                 if (image.PropertyIdList.Contains(0x0112))
@@ -233,50 +243,111 @@ namespace Picksy
             }
         }
 
-        private void SelectedPhotoTimer_Tick(object sender, EventArgs e)
+        private void SelectedOverlayTimer_Tick(object? sender, EventArgs e)
         {
-            selectedPhotoTimer.Stop();
-            if (animatedSelectedBox != null)
-            {
-                animatedSelectedBox.Size = originalSize;
-                animatedSelectedBox = null;
-            }
-            UpdateTournamentUI(); // Proceed after animation
-        }
+            if (sender is null)
+                return;
 
-        private void NonSelectedPhotoTimer_Tick(object sender, EventArgs e)
-        {
-            nonSelectedPhotoTimer.Stop();
-            if (animatedNonSelectedBox != null && originalNonSelectedImage != null)
-            {
-                animatedNonSelectedBox.Image?.Dispose();
-                animatedNonSelectedBox.Image = originalNonSelectedImage;
-                originalNonSelectedImage = null;
-                animatedNonSelectedBox = null;
-            }
-        }
+            const int initialDelay = 0; // Keep your 0ms initial delay
+            const int fadeDuration = 60; // 40ms for faster transition
+            const int ticksForFade = fadeDuration / 2; // ~8 ticks for 40ms at 5ms interval
 
-        private Image ApplyGrayscale(Image original)
-        {
-            Bitmap grayscale = new Bitmap(original.Width, original.Height);
-            using (Graphics g = Graphics.FromImage(grayscale))
+            selectedAnimationStep++;
+            if (selectedAnimationStep <= initialDelay / 2) // ~0ms
             {
-                ColorMatrix colorMatrix = new ColorMatrix(new float[][]
+                // Keep full opacity
+                selectedOverlayOpacity = 1f;
+            }
+            else if (selectedAnimationStep <= (initialDelay + fadeDuration) / 5) // ~40ms total
+            {
+                // Fade out over 40ms
+                float progress = (selectedAnimationStep - initialDelay / 2f) / ticksForFade;
+                selectedOverlayOpacity = 1f - progress;
+            }
+            else
+            {
+                // Animation complete
+                selectedOverlayTimer.Stop();
+                if (selectedOverlayLeft != null)
                 {
-                    new float[] { 0.299f, 0.299f, 0.299f, 0, 0 },
-                    new float[] { 0.587f, 0.587f, 0.587f, 0, 0 },
-                    new float[] { 0.114f, 0.114f, 0.114f, 0, 0 },
-                    new float[] { 0, 0, 0, 0.1f, 0 }, // Alpha set to 0.5 for 50% transparency
-                    new float[] { 0, 0, 0, 0, 1 }
-                });
-                using (ImageAttributes attributes = new ImageAttributes())
-                {
-                    attributes.SetColorMatrix(colorMatrix);
-                    g.DrawImage(original, new Rectangle(0, 0, original.Width, original.Height), 
-                                0, 0, original.Width, original.Height, GraphicsUnit.Pixel, attributes);
+                    this.Controls.Remove(selectedOverlayLeft);
+                    selectedOverlayLeft.Dispose();
+                    selectedOverlayLeft = null;
                 }
+                if (selectedOverlayRight != null)
+                {
+                    this.Controls.Remove(selectedOverlayRight);
+                    selectedOverlayRight.Dispose();
+                    selectedOverlayRight = null;
+                }
+                selectedOverlayOpacity = 1f;
+                selectedAnimationStep = 0;
+                isKeepBothAnimation = false;
+                animationsCompleted = true;
+                isAnimating = false;
+                Console.WriteLine($"SelectedOverlayTimer_Tick: Completed at {DateTime.Now.Ticks / 10000}ms, nonSelectedOverlay={(nonSelectedOverlay == null ? "null" : "active")}, isKeepBothAnimation={isKeepBothAnimation}");
+                if (nonSelectedOverlay == null || isKeepBothAnimation)
+                {
+                    Console.WriteLine($"SelectedOverlayTimer_Tick: Calling UpdateTournamentUI at {DateTime.Now.Ticks / 10000}ms");
+                    UpdateTournamentUI(); // Update only if non-selected animation is done or not needed
+                }
+                return;
             }
-            return grayscale;
+
+            // Update overlay opacity
+            if (selectedOverlayLeft != null)
+                selectedOverlayLeft.BackColor = Color.FromArgb((int)(selectedOverlayOpacity * 255), Color.White);
+            if (selectedOverlayRight != null)
+                selectedOverlayRight.BackColor = Color.FromArgb((int)(selectedOverlayOpacity * 255), Color.White);
+        }
+
+        private void NonSelectedOverlayTimer_Tick(object? sender, EventArgs e)
+        {
+            if (sender is null)
+                return;
+
+            const int fadeDuration = 80; // 40ms for faster transition
+            const int ticksForFade = fadeDuration / 5; // ~8 ticks for 40ms at 5ms interval
+
+            nonSelectedAnimationStep++;
+            if (nonSelectedAnimationStep <= ticksForFade)
+            {
+                // Fade in over 40ms
+                float progress = nonSelectedAnimationStep / (float)ticksForFade;
+                nonSelectedOverlayOpacity = progress;
+            }
+            else
+            {
+                // Animation complete
+                nonSelectedOverlayTimer.Stop();
+                if (nonSelectedOverlay != null)
+                {
+                    this.Controls.Remove(nonSelectedOverlay);
+                    nonSelectedOverlay.Dispose();
+                    nonSelectedOverlay = null;
+                }
+                if (nonSelectedBox != null)
+                {
+                    nonSelectedBox.Image?.Dispose();
+                    nonSelectedBox.Image = null; // Hide non-selected photo
+                    nonSelectedBox = null;
+                }
+                nonSelectedOverlayOpacity = 0f;
+                nonSelectedAnimationStep = 0;
+                animationsCompleted = true;
+                isAnimating = false;
+                Console.WriteLine($"NonSelectedOverlayTimer_Tick: Completed at {DateTime.Now.Ticks / 10000}ms, selectedOverlayLeft={(selectedOverlayLeft == null ? "null" : "active")}, selectedOverlayRight={(selectedOverlayRight == null ? "null" : "active")}");
+                if (animationsCompleted && (selectedOverlayLeft == null && selectedOverlayRight == null))
+                {
+                    Console.WriteLine($"NonSelectedOverlayTimer_Tick: Calling UpdateTournamentUI at {DateTime.Now.Ticks / 10000}ms");
+                    UpdateTournamentUI(); // Update only if selected animation is done
+                }
+                return;
+            }
+
+            // Update overlay opacity
+            if (nonSelectedOverlay != null)
+                nonSelectedOverlay.BackColor = Color.FromArgb((int)(nonSelectedOverlayOpacity * 255), Color.Black);
         }
 
         private void SelectFolderButton_Click(object sender, EventArgs e)
@@ -346,7 +417,7 @@ namespace Picksy
                         currentBatchIndex = 0;
                         totalBatchPhotos = 0;
                         deletedPhotosCount = 0;
-                        if (batches.Count > 0)
+                        if (batches?.Count > 0)
                         {
                             StartTournament(batches[0]);
                         }
@@ -540,7 +611,7 @@ namespace Picksy
                     // If CurrentBatch is empty or invalid, reset it from the current batch index
                     if (currentBatch.Count < savedSettings.BatchSizeMinimum && batches.Count > 0)
                     {
-                        currentBatch = new List<string>(batches[currentBatchIndex]);
+                        currentBatch = new List<string>(batches[0]);
                         remainingPhotos = new List<string>(currentBatch);
                         currentPairIndex = 0;
                     }
@@ -684,15 +755,22 @@ namespace Picksy
             remainingLabel.Visible = true;
             instructionLabel.Visible = true;
             batchProgressLabel.Visible = true; // Show batch progress label
-            seenProgressContainer.Visible = true; // Show seen progress bar
-            reseenProgressContainer.Visible = false; // Hide reseen progress bar initially
-            seenProgressBar.Width = 0; // Reset seen progress
-            reseenProgressBar.Width = 0; // Reset reseen progress
+            if (seenProgressContainer != null)
+                seenProgressContainer.Visible = true; // Show seen progress bar
+            if (reseenProgressContainer != null)
+                reseenProgressContainer.Visible = false; // Hide reseen progress bar initially
+            if (seenProgressBar != null)
+                seenProgressBar.Width = 0; // Reset seen progress
+            if (reseenProgressBar != null)
+                reseenProgressBar.Width = 0; // Reset reseen progress
             UpdateTournamentUI();
         }
 
         private void UpdateTournamentUI()
         {
+            var startTime = DateTime.Now.Ticks / 10000; // ms
+            Console.WriteLine($"UpdateTournamentUI: Started at {startTime}ms");
+
             if (remainingPhotos == null)
             {
                 ShowResults();
@@ -704,8 +782,10 @@ namespace Picksy
                 {
                     MessageBox.Show("Tournament ended. No photos left.", "Picksy");
                 }
-                seenProgressBar.Width = seenProgressContainer.Width; // Set to 100%
-                reseenProgressContainer.Visible = false; // Hide reseen bar
+                if (seenProgressBar != null && seenProgressContainer != null)
+                    seenProgressBar.Width = seenProgressContainer.Width; // Set to 100%
+                if (reseenProgressContainer != null)
+                    reseenProgressContainer.Visible = false; // Hide reseen bar
                 batchProgressLabel.Text = "Batch Progress: 100% Seen";
                 ShowResults();
                 return;
@@ -716,8 +796,10 @@ namespace Picksy
                 {
                     MessageBox.Show($"Tournament ended. Winner: {Path.GetFileName(remainingPhotos[0])}", "Picksy");
                 }
-                seenProgressBar.Width = seenProgressContainer.Width; // Set to 100%
-                reseenProgressContainer.Visible = false; // Hide reseen bar
+                if (seenProgressBar != null && seenProgressContainer != null)
+                    seenProgressBar.Width = seenProgressContainer.Width; // Set to 100%
+                if (reseenProgressContainer != null)
+                    reseenProgressContainer.Visible = false; // Hide reseen bar
                 batchProgressLabel.Text = "Batch Progress: 100% Seen";
                 ShowResults();
                 return;
@@ -736,7 +818,8 @@ namespace Picksy
                 seenPhotos.Add(remainingPhotos[currentPairIndex]);
                 if (allSeen)
                 {
-                    reseenProgressContainer.Visible = true;
+                    if (reseenProgressContainer != null)
+                        reseenProgressContainer.Visible = true;
                     reseenPhotos.Add(remainingPhotos[currentPairIndex]);
                 }
             }
@@ -758,10 +841,12 @@ namespace Picksy
             Image? rightImage = null;
             try
             {
+                var loadStart = DateTime.Now.Ticks / 10000;
                 if (remainingPhotos.Count > currentPairIndex)
                     leftImage = Image.FromFile(remainingPhotos[currentPairIndex]);
                 if (remainingPhotos.Count > currentPairIndex + 1)
                     rightImage = Image.FromFile(remainingPhotos[currentPairIndex + 1]);
+                Console.WriteLine($"UpdateTournamentUI: Image loading took {(DateTime.Now.Ticks / 10000) - loadStart}ms");
 
                 // Get EXIF and manual rotations
                 int leftExifRotation = remainingPhotos.Count > currentPairIndex ? GetExifOrientation(leftImage) : 1;
@@ -835,32 +920,38 @@ namespace Picksy
                 rightImage?.Dispose();
             }
             // Update remaining photos and batches display
-            int batchesRemaining = (batches != null && batches.Count > currentBatchIndex) ? batches.Count - currentBatchIndex - 1 : 0;
+            int batchesRemaining = (batches?.Count > currentBatchIndex) ? batches.Count - currentBatchIndex - 1 : 0;
             remainingLabel.Text = $"Photos remaining: {remainingPhotos.Count} | Batches remaining: {batchesRemaining}";
 
             // Calculate seen percentage
             int seenPercentage = (initialBatchSize > 0) ? Math.Min((seenPhotos.Count * 100) / initialBatchSize, 100) : 100;
-            int seenWidth = (int)(seenPercentage / 100.0 * seenProgressContainer.Width);
-            seenProgressBar.Width = Math.Min(seenWidth, seenProgressContainer.Width);
+            int seenWidth = (int)(seenPercentage / 100.0 * (seenProgressContainer?.Width ?? 1));
+            if (seenProgressBar != null)
+                seenProgressBar.Width = Math.Min(seenWidth, seenProgressContainer?.Width ?? 1);
 
             // Handle re-viewed progress
             if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count > 0)
             {
-                reseenProgressContainer.Visible = true;
+                if (reseenProgressContainer != null)
+                    reseenProgressContainer.Visible = true;
                 int reseenPercentage = (remainingPhotos.Count > 0) ? (reseenPhotos.Count * 100) / remainingPhotos.Count : 0;
-                int reseenWidth = (int)(reseenPercentage / 100.0 * reseenProgressContainer.Width);
-                reseenProgressBar.Width = Math.Min(reseenWidth, reseenProgressContainer.Width);
+                int reseenWidth = (int)(reseenPercentage / 100.0 * (reseenProgressContainer?.Width ?? 1));
+                if (reseenProgressBar != null)
+                    reseenProgressBar.Width = Math.Min(reseenWidth, reseenProgressContainer?.Width ?? 1);
                 batchProgressLabel.Text = $"All Photos Viewed! - {reseenPercentage}% Re-Viewed" + 
                                          (reseenPercentage > 99 ? " (Press Enter to Keep All)" : "");
             }
             else
             {
-                reseenProgressContainer.Visible = false;
-                reseenProgressBar.Width = 0;
+                if (reseenProgressContainer != null)
+                    reseenProgressContainer.Visible = false;
+                if (reseenProgressBar != null)
+                    reseenProgressBar.Width = 0;
                 batchProgressLabel.Text = $"Batch Progress: {seenPercentage}% Viewed";
             }
 
             UpdatePictureBoxSizes();
+            Console.WriteLine($"UpdateTournamentUI: Completed at {(DateTime.Now.Ticks / 10000) - startTime}ms");
         }
 
         private Image CreateThumbnail(Image image, int rotation)
@@ -920,7 +1011,7 @@ namespace Picksy
         private void UpdatePictureBoxSizes()
         {
             // Calculate available space, accounting for menu strip, buttons, labels, and progress bars
-            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - batchProgressLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - copyrightLabel.Height - seenProgressContainer.Height - reseenProgressContainer.Height - 100; // Adjusted for label and progress bar
+            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - batchProgressLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - copyrightLabel.Height - (seenProgressContainer?.Height ?? 0) - (reseenProgressContainer?.Height ?? 0) - 100; // Adjusted for label and progress bar
             int availableWidth = (ClientSize.Width - 40) / 2; // Increased side padding to 20 per side
 
             // Set PictureBox size to fit images without cropping
@@ -937,12 +1028,14 @@ namespace Picksy
             instructionLabel.Location = new Point((ClientSize.Width - instructionLabel.Width) / 2, remainingLabel.Bottom + 15); // Center horizontally
 
             // Position progress bars and label
-            int progressBarX = (ClientSize.Width - seenProgressContainer.Width) / 2;
-            seenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25);
-            reseenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25); // Overlap with seen bar
+            int progressBarX = (ClientSize.Width - (seenProgressContainer?.Width ?? 560)) / 2;
+            if (seenProgressContainer != null)
+                seenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25);
+            if (reseenProgressContainer != null)
+                reseenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25); // Overlap with seen bar
             batchProgressLabel.Location = new Point(progressBarX, instructionLabel.Bottom + 5); // Align left with progress bars, above them
 
-            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, reseenProgressContainer.Bottom + 15);
+            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, (reseenProgressContainer?.Bottom ?? ClientSize.Height) + 15);
             thumbnailPanel.Location = new Point(20, menuStrip.Height + 20);
             deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 20); // Increased gap
         }
@@ -1002,11 +1095,13 @@ namespace Picksy
 
         private void PictureBoxLeft_Click(object sender, EventArgs e)
         {
+            Console.WriteLine($"PictureBoxLeft_Click: Triggered at {DateTime.Now.Ticks / 10000}ms");
             SelectPhoto(true);
         }
 
         private void PictureBoxRight_Click(object sender, EventArgs e)
         {
+            Console.WriteLine($"PictureBoxRight_Click: Triggered at {DateTime.Now.Ticks / 10000}ms");
             SelectPhoto(false);
         }
 
@@ -1032,9 +1127,18 @@ namespace Picksy
 
         private void SaveAndQuitButton_Click(object sender, EventArgs e)
         {
+            SaveStateToFile(true); // Show confirmation message
+            Application.Exit();
+        }
+
+        private void SaveStateToFile(bool showConfirmation)
+        {
             if (currentFolderPath == null)
             {
-                MessageBox.Show("No folder selected. Cannot save state.", "Picksy Error");
+                if (showConfirmation)
+                {
+                    MessageBox.Show("No folder selected. Cannot save state.", "Picksy Error");
+                }
                 return;
             }
 
@@ -1076,12 +1180,17 @@ namespace Picksy
                 };
                 string stateFilePath = Path.Combine(currentFolderPath, "picksy_state.json");
                 File.WriteAllText(stateFilePath, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
-                MessageBox.Show($"State saved to {stateFilePath}. Exiting.", "Picksy");
-                Application.Exit();
+                if (showConfirmation)
+                {
+                    MessageBox.Show($"State saved to {stateFilePath}.", "Picksy");
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error saving state: {ex.Message}", "Picksy Error");
+                if (showConfirmation)
+                {
+                    MessageBox.Show($"Error saving state: {ex.Message}", "Picksy Error");
+                }
             }
         }
 
@@ -1091,16 +1200,19 @@ namespace Picksy
             {
                 if (keyData == Keys.Left)
                 {
+                    Console.WriteLine($"ProcessCmdKey: Left key triggered at {DateTime.Now.Ticks / 10000}ms");
                     SelectPhoto(true);
                     return true;
                 }
                 else if (keyData == Keys.Right)
                 {
+                    Console.WriteLine($"ProcessCmdKey: Right key triggered at {DateTime.Now.Ticks / 10000}ms");
                     SelectPhoto(false);
                     return true;
                 }
                 else if (keyData == Keys.Up)
                 {
+                    Console.WriteLine($"ProcessCmdKey: Up key triggered at {DateTime.Now.Ticks / 10000}ms");
                     KeepBothPhotos();
                     return true;
                 }
@@ -1169,7 +1281,11 @@ namespace Picksy
 
         private void SelectPhoto(bool leftSelected)
         {
-            if (remainingPhotos == null) return;
+            if (remainingPhotos == null || isAnimating)
+            {
+                Console.WriteLine($"SelectPhoto: Blocked - remainingPhotos={(remainingPhotos == null ? "null" : remainingPhotos.Count.ToString())}, isAnimating={isAnimating}");
+                return;
+            }
 
             // Keep the winner, add loser to losers list
             int winnerIndex = leftSelected ? currentPairIndex : currentPairIndex + 1;
@@ -1187,30 +1303,59 @@ namespace Picksy
             // Apply animations if not skipped
             if (!skipAnimationsCheckBox.Checked)
             {
+                isAnimating = true;
+                animationsCompleted = false;
                 PictureBox selectedBox = leftSelected ? pictureBoxLeft : pictureBoxRight;
-                PictureBox nonSelectedBox = leftSelected ? pictureBoxRight : pictureBoxLeft;
+                nonSelectedBox = leftSelected ? pictureBoxRight : pictureBoxLeft;
 
-                // Selected photo: expand slightly
-                animatedSelectedBox = selectedBox;
-                originalSize = selectedBox.Size;
-                int newWidth = (int)(originalSize.Width * 1);
-                int newHeight = (int)(originalSize.Height * 1);
-                selectedBox.Size = new Size(newWidth, newHeight);
-                selectedBox.Location = new Point(
-                    selectedBox.Location.X - (newWidth - originalSize.Width) / 2,
-                    selectedBox.Location.Y - (newHeight - originalSize.Height) / 2);
-
-                // Non-selected photo: grayscale
-                animatedNonSelectedBox = nonSelectedBox;
-                if (nonSelectedBox.Image != null)
+                // Selected photo: white overlay
+                selectedOverlayOpacity = 1f;
+                if (leftSelected)
                 {
-                    originalNonSelectedImage = nonSelectedBox.Image;
-                    nonSelectedBox.Image = ApplyGrayscale(originalNonSelectedImage);
+                    selectedOverlayLeft = new Panel
+                    {
+                        Size = selectedBox.Size,
+                        Location = selectedBox.Location,
+                        BackColor = Color.White
+                    };
+                    this.Controls.Add(selectedOverlayLeft);
+                    selectedOverlayLeft.BringToFront();
+                    selectedOverlayRight = null;
+                }
+                else
+                {
+                    selectedOverlayRight = new Panel
+                    {
+                        Size = selectedBox.Size,
+                        Location = selectedBox.Location,
+                        BackColor = Color.White
+                    };
+                    this.Controls.Add(selectedOverlayRight);
+                    selectedOverlayRight.BringToFront();
+                    selectedOverlayLeft = null;
                 }
 
-                // Start animation timers
-                selectedPhotoTimer.Start();
-                nonSelectedPhotoTimer.Start();
+                // Non-selected photo: black overlay
+                nonSelectedOverlayOpacity = 0f;
+                nonSelectedOverlay = new Panel
+                {
+                    Size = nonSelectedBox.Size,
+                    Location = nonSelectedBox.Location,
+                    BackColor = Color.FromArgb(0, Color.Black)
+                };
+                this.Controls.Add(nonSelectedOverlay);
+                // Non-selected overlay goes below selected overlay
+                if (selectedOverlayLeft != null)
+                    selectedOverlayLeft.BringToFront();
+                if (selectedOverlayRight != null)
+                    selectedOverlayRight.BringToFront();
+
+                isKeepBothAnimation = false;
+                selectedAnimationStep = 0;
+                nonSelectedAnimationStep = 0;
+                Console.WriteLine($"SelectPhoto: Starting animations at {DateTime.Now.Ticks / 10000}ms, leftSelected={leftSelected}");
+                selectedOverlayTimer.Start();
+                nonSelectedOverlayTimer.Start();
             }
             else
             {
@@ -1220,7 +1365,11 @@ namespace Picksy
 
         private void KeepBothPhotos()
         {
-            if (remainingPhotos == null) return;
+            if (remainingPhotos == null || currentPairIndex + 1 >= remainingPhotos.Count || isAnimating)
+            {
+                Console.WriteLine($"KeepBothPhotos: Blocked - remainingPhotos={(remainingPhotos == null ? "null" : remainingPhotos.Count.ToString())}, isAnimating={isAnimating}");
+                return;
+            }
 
             // Keep both photos, mark them as seen, advance to next pair
             bool allSeen = seenPhotos.Count == initialBatchSize;
@@ -1233,7 +1382,43 @@ namespace Picksy
             }
             history.Push((null, true));
             currentPairIndex += 2;
-            UpdateTournamentUI();
+
+            // Apply animations if not skipped
+            if (!skipAnimationsCheckBox.Checked)
+            {
+                isAnimating = true;
+                animationsCompleted = false;
+                // Flash both photos with white overlays
+                selectedOverlayOpacity = 1f;
+                selectedOverlayLeft = new Panel
+                {
+                    Size = pictureBoxLeft.Size,
+                    Location = pictureBoxLeft.Location,
+                    BackColor = Color.White
+                };
+                selectedOverlayRight = new Panel
+                {
+                    Size = pictureBoxRight.Size,
+                    Location = pictureBoxRight.Location,
+                    BackColor = Color.White
+                };
+                this.Controls.Add(selectedOverlayLeft);
+                this.Controls.Add(selectedOverlayRight);
+                selectedOverlayLeft.BringToFront();
+                selectedOverlayRight.BringToFront();
+                nonSelectedOverlay = null; // No black overlay for KeepBothPhotos
+                nonSelectedBox = null; // No non-selected photo
+
+                isKeepBothAnimation = true;
+                selectedAnimationStep = 0;
+                nonSelectedAnimationStep = 0;
+                Console.WriteLine($"KeepBothPhotos: Starting animations at {DateTime.Now.Ticks / 10000}ms");
+                selectedOverlayTimer.Start();
+            }
+            else
+            {
+                UpdateTournamentUI();
+            }
         }
 
         private void EndTournament()
@@ -1272,7 +1457,8 @@ namespace Picksy
                 if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count >= 2)
                 {
                     reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
-                    reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
+                    if (reseenProgressContainer != null)
+                        reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
                     reseenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
                 }
                 // Remove from seenPhotos
@@ -1297,12 +1483,14 @@ namespace Picksy
                 // Remove from reseenPhotos if applicable
                 if (reseenPhotos.Contains(remainingPhotos[currentPairIndex]))
                 {
-                    reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
+                    if (reseenProgressContainer != null)
+                        reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
                     reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
                 }
                 if (reseenPhotos.Contains(lastAction.Loser))
                 {
-                    reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
+                    if (reseenProgressContainer != null)
+                        reseenProgressContainer.Visible = false; // Hide reseen bar when undoing
                     reseenPhotos.Remove(lastAction.Loser);
                 }
             }
@@ -1337,8 +1525,10 @@ namespace Picksy
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
             batchProgressLabel.Visible = false; // Hide batch progress label
-            seenProgressContainer.Visible = false; // Hide seen progress bar
-            reseenProgressContainer.Visible = false; // Hide reseen progress bar
+            if (seenProgressContainer != null)
+                seenProgressContainer.Visible = false; // Hide seen progress bar
+            if (reseenProgressContainer != null)
+                reseenProgressContainer.Visible = false; // Hide reseen progress bar
 
             // Show thumbnails
             ClearThumbnails();
@@ -1495,7 +1685,7 @@ namespace Picksy
                 using (var form = new Form
                 {
                     Text = "Picksy - Session Complete",
-                    Size = new Size(700, 500), // Increased dialog size
+                    Size = new Size(700, 550), // Increased height for checkbox
                     StartPosition = FormStartPosition.CenterParent,
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     MaximizeBox = false,
@@ -1514,7 +1704,7 @@ namespace Picksy
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White,
-                        Font = new Font("Montserrat SemiBold", 18F, FontStyle.Bold) // Larger title font
+                        Font = new Font("Montserrat SemiBold", 18F, FontStyle.Bold)
                     };
 
                     // Stats label
@@ -1537,22 +1727,41 @@ namespace Picksy
                         Size = new Size(660, 50),
                         TextAlign = ContentAlignment.MiddleCenter,
                         BackColor = Color.Transparent,
-                        ForeColor = Color.White, // White for emphasis
-                        Font = new Font("Montserrat SemiBold", 24F, FontStyle.Bold) // Largest text
+                        ForeColor = Color.White,
+                        Font = new Font("Montserrat SemiBold", 24F, FontStyle.Bold)
                     };
+
+                    // Create savestate checkbox (only if no savestate exists)
+                    bool saveStateExists = currentFolderPath != null && File.Exists(Path.Combine(currentFolderPath, "picksy_state.json"));
+                    CheckBox createSaveStateCheckBox = null;
+                    if (!saveStateExists)
+                    {
+                        createSaveStateCheckBox = new CheckBox
+                        {
+                            Text = "Create savestate for future use",
+                            Location = new Point(20, 310),
+                            Size = new Size(660, 30),
+                            TextAlign = ContentAlignment.MiddleCenter,
+                            BackColor = Color.Transparent,
+                            ForeColor = Color.White,
+                            Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
+                            Checked = true // Default checked
+                        };
+                        form.Controls.Add(createSaveStateCheckBox);
+                    }
 
                     // Buttons
                     var coffeeButton = new Button
                     {
-                        Text = "Support Picksy", // Full text
-                        Size = new Size(160, 60), // Larger button size
-                        Location = new Point(90, 330),
+                        Text = "Support Picksy",
+                        Size = new Size(160, 60),
+                        Location = new Point(90, saveStateExists ? 330 : 350), // Adjust for checkbox
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
                         UseVisualStyleBackColor = false
                     };
-                    SetupButtonHover(coffeeButton); // Apply hover effect
+                    SetupButtonHover(coffeeButton);
                     coffeeButton.Click += (s, e) =>
                     {
                         try
@@ -1567,15 +1776,15 @@ namespace Picksy
 
                     var shareButton = new Button
                     {
-                        Text = "Share Picksy", // Full text
-                        Size = new Size(160, 60), // Larger button size
-                        Location = new Point(270, 330),
+                        Text = "Share Picksy",
+                        Size = new Size(160, 60),
+                        Location = new Point(270, saveStateExists ? 330 : 350),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new System.Drawing.Font("Montserrat SemiBold", 12F, System.Drawing.FontStyle.Regular),
                         UseVisualStyleBackColor = false
                     };
-                    SetupButtonHover(shareButton); // Apply hover effect
+                    SetupButtonHover(shareButton);
                     shareButton.Click += (s, e) =>
                     {
                         try
@@ -1594,15 +1803,23 @@ namespace Picksy
                     var closeButton = new Button
                     {
                         Text = "Close",
-                        Size = new Size(160, 60), // Larger button size
-                        Location = new Point(450, 330),
+                        Size = new Size(160, 60),
+                        Location = new Point(450, saveStateExists ? 330 : 350),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new System.Drawing.Font("Montserrat SemiBold", 12F, System.Drawing.FontStyle.Regular),
                         UseVisualStyleBackColor = false
                     };
-                    SetupButtonHover(closeButton); // Apply hover effect
-                    closeButton.Click += (s, e) => form.Close();
+                    SetupButtonHover(closeButton);
+                    closeButton.Click += (s, e) =>
+                    {
+                        // Save state if it exists or if checkbox is checked
+                        if (saveStateExists || (createSaveStateCheckBox != null && createSaveStateCheckBox.Checked))
+                        {
+                            SaveStateToFile(false); // No confirmation for batch completion
+                        }
+                        form.Close();
+                    };
 
                     // Add controls to form
                     form.Controls.Add(titleLabel);
@@ -1617,7 +1834,7 @@ namespace Picksy
             }
         }
 
-        private void ResetUI()
+               private void ResetUI()
         {
             pictureBoxLeft.Image?.Dispose();
             pictureBoxRight.Image?.Dispose();
@@ -1638,8 +1855,10 @@ namespace Picksy
             remainingLabel.Visible = false;
             instructionLabel.Visible = false;
             batchProgressLabel.Visible = false; // Hide batch progress label
-            seenProgressContainer.Visible = false; // Hide seen progress bar
-            reseenProgressContainer.Visible = false; // Hide reseen progress bar
+            if (seenProgressContainer != null)
+                seenProgressContainer.Visible = false; // Hide seen progress bar
+            if (reseenProgressContainer != null)
+                reseenProgressContainer.Visible = false; // Hide reseen progress bar
             currentBatch = null;
             remainingPhotos = null;
             losers = null;
