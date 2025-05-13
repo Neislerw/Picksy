@@ -75,8 +75,23 @@ namespace Picksy
             selectFolderButton.BringToFront();
             try
             {
-                this.Icon = new Icon("Resources\\logo.ico");
-                logoPictureBox.Image = Image.FromFile("Resources\\logo.png");
+                // Load logo.ico from embedded resource
+                using (var iconStream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Picksy.Resources.logo.ico"))
+                {
+                    if (iconStream != null)
+                        this.Icon = new Icon(iconStream);
+                    else
+                        throw new FileNotFoundException("Embedded resource logo.ico not found.");
+                }
+
+                // Load logo.png from embedded resource
+                using (var imageStream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Picksy.Resources.logo.png"))
+                {
+                    if (imageStream != null)
+                        logoPictureBox.Image = Image.FromStream(imageStream);
+                    else
+                        throw new FileNotFoundException("Embedded resource logo.png not found.");
+                }
             }
             catch (Exception ex)
             {
@@ -789,7 +804,7 @@ namespace Picksy
                 int reseenWidth = (int)(reseenPercentage / 100.0 * (reseenProgressContainer?.Width ?? 1));
                 if (reseenProgressBar != null && reseenProgressContainer != null)
                     reseenProgressBar.Width = Math.Min(reseenWidth, reseenProgressContainer.Width);
-                batchProgressLabel.Text = $"All Photos Viewed! - {reseenPercentage}% Re-Viewed" + 
+                batchProgressLabel.Text = $"{reseenPercentage}% Re-Viewed" + 
                                          (reseenPercentage > 99 ? " (Press Enter to Keep All)" : "");
             }
             else
@@ -1482,7 +1497,7 @@ namespace Picksy
                     var statsLabel = new Label
                     {
                         Text = statsMessage,
-                        Location = new Point(20, 80),
+                        Location = new Point(20, 130),
                         Size = new Size(660, 120),
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
@@ -1508,9 +1523,9 @@ namespace Picksy
                         createSaveStateCheckBox = new CheckBox
                         {
                             Text = "Create savestate for future use",
-                            Location = new Point(20, 310),
-                            Size = new Size(660, 30),
-                            TextAlign = ContentAlignment.MiddleCenter,
+                            Location = new Point(200, 220), // Centered above thanksLabel
+                            Size = new Size(300, 30), // Narrower to fit text
+                            TextAlign = ContentAlignment.MiddleLeft, // Text close to checkbox
                             BackColor = Color.Transparent,
                             ForeColor = Color.White,
                             Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1523,7 +1538,7 @@ namespace Picksy
                     {
                         Text = "Support Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(90, saveStateExists ? 330 : 350),
+                        Location = new Point(90, saveStateExists ? 330 : 330),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1546,7 +1561,7 @@ namespace Picksy
                     {
                         Text = "Share Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(270, saveStateExists ? 330 : 350),
+                        Location = new Point(270, saveStateExists ? 330 : 330),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1572,7 +1587,7 @@ namespace Picksy
                     {
                         Text = "Close",
                         Size = new Size(160, 60),
-                        Location = new Point(450, saveStateExists ? 330 : 350),
+                        Location = new Point(450, saveStateExists ? 330 : 330),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),

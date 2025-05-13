@@ -13,11 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Resources\logo.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Resources\logo.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="Resources\logo.ico" />
+    <EmbeddedResource Include="Resources\logo.png" />
   </ItemGroup>
 </Project>
