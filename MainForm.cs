@@ -323,7 +323,8 @@ namespace Picksy
                             .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                             .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                             .Count();
-                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchSelectionMethod);
+                        var batchMethod = Enum.Parse<BatchSelectionMethod>(batchSelectionMethod.Replace(" ", ""));
+                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchMethod, debugLogging: false);
                         batches = grouper.GroupPhotos(dialog.SelectedPath);
                         currentBatchIndex = 0;
                         totalBatchPhotos = 0;
@@ -456,24 +457,24 @@ namespace Picksy
                 string deleteFolder = Path.Combine(currentFolderPath, "_delete");
                 var validFilesFilter = new Func<string, bool>(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar));
 
-                int originalRemainingCount = remainingPhotos.Count;
-                remainingPhotos = remainingPhotos.Where(validFilesFilter).ToList();
-                losers = losers.Where(validFilesFilter).ToList();
-                deletedPhotosCount += originalRemainingCount - remainingPhotos.Count;
+                int originalRemainingCount = remainingPhotos?.Count ?? 0;
+                remainingPhotos = remainingPhotos?.Where(validFilesFilter).ToList() ?? new List<string>();
+                losers = losers?.Where(validFilesFilter).ToList() ?? new List<string>();
+                deletedPhotosCount += originalRemainingCount - (remainingPhotos?.Count ?? 0);
 
-                int originalCurrentBatchCount = currentBatch.Count;
-                currentBatch = currentBatch.Where(validFilesFilter).ToList();
-                deletedPhotosCount += originalCurrentBatchCount - currentBatch.Count;
+                int originalCurrentBatchCount = currentBatch?.Count ?? 0;
+                currentBatch = currentBatch?.Where(validFilesFilter).ToList() ?? new List<string>();
+                deletedPhotosCount += originalCurrentBatchCount - (currentBatch?.Count ?? 0);
 
-                int originalBatchPhotoCount = batches.Sum(b => b.Count);
-                batches = batches.Skip(currentBatchIndex)
+                int originalBatchPhotoCount = batches?.Sum(b => b.Count) ?? 0;
+                batches = batches?.Skip(currentBatchIndex)
                                 .Select(batch => batch.Where(validFilesFilter).ToList())
                                 .Where(batch => batch.Count >= savedSettings.BatchSizeMinimum || (isLoadingSession && batch.Any(f => currentBatch.Contains(f))))
-                                .ToList();
-                int newBatchPhotoCount = batches.Sum(b => b.Count);
+                                .ToList() ?? new List<List<string>>();
+                int newBatchPhotoCount = batches?.Sum(b => b.Count) ?? 0;
                 deletedPhotosCount += originalBatchPhotoCount - newBatchPhotoCount - originalCurrentBatchCount;
 
-                if (batches.Count == 0 || currentBatchIndex >= batches.Count)
+                if (batches == null || batches.Count == 0 || currentBatchIndex >= batches.Count)
                 {
                     currentBatchIndex = 0;
                 }
@@ -482,10 +483,10 @@ namespace Picksy
                     currentBatchIndex = 0;
                 }
 
-                var validFiles = new HashSet<string>(remainingPhotos.Concat(losers).Concat(batches.SelectMany(b => b)));
-                photoRotations = photoRotations.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                var validFiles = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
+                photoRotations = photoRotations?.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, int>();
 
-                bool isSessionCompleted = batches.Count == 0 || currentBatch.Count == 0 || remainingPhotos.Count == 0 || losers.Count == 0 || currentBatchIndex >= batches.Count;
+                bool isSessionCompleted = batches == null || batches.Count == 0 || currentBatch == null || currentBatch.Count == 0 || remainingPhotos == null || remainingPhotos.Count == 0 || losers == null || losers.Count == 0 || currentBatchIndex >= batches.Count;
                 if (isSessionCompleted)
                 {
                     batches = new List<List<string>>();
@@ -495,7 +496,7 @@ namespace Picksy
                     currentBatchIndex = 0;
                     currentPairIndex = 0;
                 }
-                else if (currentBatch.Count < savedSettings.BatchSizeMinimum && batches.Count > 0)
+                else if (currentBatch != null && currentBatch.Count < savedSettings.BatchSizeMinimum && batches != null && batches.Count > 0)
                 {
                     currentBatch = new List<string>(batches[0]);
                     remainingPhotos = new List<string>(currentBatch);
@@ -508,17 +509,18 @@ namespace Picksy
                     .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                     .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                     .ToList();
-                var processedPhotos = new HashSet<string>(remainingPhotos.Concat(losers).Concat(batches.SelectMany(b => b)));
+                var processedPhotos = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
                 var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
 
                 if (newPhotos.Count > 0)
                 {
-                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, savedSettings.BatchSelectionMethod);
+                    var batchMethod = Enum.Parse<BatchSelectionMethod>(savedSettings.BatchSelectionMethod.Replace(" ", ""));
+                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, batchMethod, debugLogging: false);
                     var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
                     newBatches = newBatches.Where(b => b.Count >= savedSettings.BatchSizeMinimum).ToList();
                     if (newBatches.Any())
                     {
-                        if (batches.Count == 0)
+                        if (batches == null || batches.Count == 0)
                         {
                             batches = newBatches;
                             currentBatchIndex = 0;
@@ -546,9 +548,9 @@ namespace Picksy
                     }
                 }
 
-                totalBatchPhotos = batches.Sum(b => b.Count) + currentBatch.Count;
+                totalBatchPhotos = (batches?.Sum(b => b.Count) ?? 0) + (currentBatch?.Count ?? 0);
 
-                if (batches.Count > 0 && currentBatch.Count >= savedSettings.BatchSizeMinimum)
+                if (batches != null && batches.Count > 0 && currentBatch != null && currentBatch.Count >= savedSettings.BatchSizeMinimum)
                 {
                     isLoadingSession = true;
                     try
