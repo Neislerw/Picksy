@@ -2,6 +2,7 @@
 bin/
 obj/
 publish/
+
 *.user
 *.sln.docstates
 *.csproj.user
