@@ -25,6 +25,8 @@ You can 'Save and Quit' and Picksy will keep a savestate file in your folder tha
   - View thumbnails of non-selected photos.
   - Move non-selected to a "_delete" folder or cancel to keep all photos.
 
+![Picksy Demo](Resources/demo_1.gif)
+
 ## Prerequisites
 - [.NET SDK 9.0 or later](https://dotnet.microsoft.com/download/dotnet/9.0)
 - Windows operating system (for Windows Forms)
