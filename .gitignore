@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+*.sln.docstates
+*.csproj.user
+picksy_grouper.log
+
+# NuGet
+packages/
+
+# Resources (exclude test images, allow logo)
+Resources/*.jpg
+Resources/*.jpeg
+Resources/*.png
+!Resources/logo.png
+!Resources/logo-light.png
+!Resources/logo.ico
+published/*.exe
