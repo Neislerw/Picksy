@@ -200,7 +200,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(36, 36, 36),
                 Size = new Size(560, 10),
-                Location = new Point(220, 730),
+                Location = new Point(220, 650),
                 Visible = false
             };
             seenProgressBar = new Panel
@@ -216,7 +216,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(150, 150, 150),
                 Size = new Size(560, 10),
-                Location = new Point(220, 730),
+                Location = new Point(220, 650),
                 Visible = false
             };
             reseenProgressBar = new Panel
@@ -878,15 +878,25 @@ namespace Picksy
 
         private void UpdatePictureBoxSizes()
         {
-            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - batchProgressLabel.Height - saveAndQuitButton.Height - copyrightLabel.Height - controlsPictureBox.Height - (seenProgressContainer?.Height ?? 0) - (reseenProgressContainer?.Height ?? 0) - 100;
+            int topBuffer = 5;
             int availableWidth = (ClientSize.Width - 40) / 2;
+
+            // Fixed size for controlsPictureBox
+            int controlsWidth = 600;
+            int controlsHeight = 141; // Maintain ~4.26:1 aspect ratio (600x141)
+
+            // Calculate max photo height to fit all elements without overlap
+            int totalFixedHeight = topBuffer + 10 /* feedback bar */ + 5 /* gap */ + controlsHeight + 5 /* gap */ + 
+                                  (seenProgressContainer?.Height ?? 10) + 5 /* gap */ + remainingLabel.Height + 
+                                  5 /* gap */ + saveAndQuitButton.Height + 5 /* gap */ + copyrightLabel.Height;
+            int availableHeight = Math.Max(100, ClientSize.Height - totalFixedHeight);
 
             pictureBoxLeft.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxRight.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxLeft.Size = new Size(availableWidth, availableHeight);
             pictureBoxRight.Size = new Size(availableWidth, availableHeight);
-            pictureBoxLeft.Location = new Point(20, menuStrip.Height + 20);
-            pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 20, menuStrip.Height + 20);
+            pictureBoxLeft.Location = new Point(20, topBuffer);
+            pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 20, topBuffer);
 
             int barHeight = 10;
             leftFeedbackBar.Size = new Size(availableWidth, barHeight);
@@ -894,19 +904,28 @@ namespace Picksy
             rightFeedbackBar.Size = new Size(availableWidth, barHeight);
             rightFeedbackBar.Location = new Point(ClientSize.Width - availableWidth - 20, pictureBoxRight.Bottom);
 
-            saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, pictureBoxLeft.Bottom + barHeight + 10);
-            controlsPictureBox.Location = new Point((ClientSize.Width - controlsPictureBox.Width) / 2, saveAndQuitButton.Bottom + 15);
+            controlsPictureBox.Size = new Size(controlsWidth, controlsHeight);
+            controlsPictureBox.Location = new Point((ClientSize.Width - controlsWidth) / 2, pictureBoxLeft.Bottom + barHeight + 5);
 
-            int progressBarX = (ClientSize.Width - (seenProgressContainer?.Width ?? 560)) / 2;
+            int progressBarX = (ClientSize.Width - 560) / 2;
+            int progressBarY = controlsPictureBox.Bottom + 5;
             if (seenProgressContainer != null)
-                seenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
+            {
+                seenProgressContainer.Size = new Size(560, 10);
+                seenProgressContainer.Location = new Point(progressBarX, progressBarY);
+            }
             if (reseenProgressContainer != null)
-                reseenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
-            batchProgressLabel.Location = new Point(progressBarX, controlsPictureBox.Bottom + 2);
-            remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, (seenProgressContainer?.Bottom ?? controlsPictureBox.Bottom) + 15);
+            {
+                reseenProgressContainer.Size = new Size(560, 10);
+                reseenProgressContainer.Location = new Point(progressBarX, progressBarY);
+            }
+            batchProgressLabel.Location = new Point(progressBarX, progressBarY - 15);
 
-            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, remainingLabel.Bottom + 15);
-            thumbnailPanel.Location = new Point(20, menuStrip.Height + 20);
+            remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, progressBarY + 15);
+            saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, remainingLabel.Bottom + 5);
+
+            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, ClientSize.Height - copyrightLabel.Height - 5);
+            thumbnailPanel.Location = new Point(20, topBuffer + 20);
             deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 20);
         }
 
@@ -1060,6 +1079,13 @@ namespace Picksy
                 }
                 else if (keyData == Keys.Down)
                 {
+                    Console.WriteLine($"ProcessCmdKey: Down key triggered at {DateTime.Now.Ticks / 10000}ms");
+                    DeleteBothPhotos();
+                    return true;
+                }
+                else if (keyData == Keys.Z)
+                {
+                    Console.WriteLine($"ProcessCmdKey: Z key triggered at {DateTime.Now.Ticks / 10000}ms");
                     UndoLastAction();
                     return true;
                 }
@@ -1200,6 +1226,49 @@ namespace Picksy
                 nonSelectedBox = null;
 
                 Console.WriteLine($"KeepBothPhotos: Showing green bars at {DateTime.Now.Ticks / 10000}ms, leftImage={(pictureBoxLeft.Image == null ? "null" : "present")}, rightImage={(pictureBoxRight.Image == null ? "null" : "present")}");
+                feedbackTimer.Start();
+            }
+            else
+            {
+                UpdateTournamentUI();
+            }
+        }
+
+        private void DeleteBothPhotos()
+        {
+            if (remainingPhotos == null || currentPairIndex + 1 >= remainingPhotos.Count || isAnimating)
+            {
+                Console.WriteLine($"DeleteBothPhotos: Blocked - remainingPhotos={(remainingPhotos == null ? "null" : remainingPhotos.Count.ToString())}, isAnimating={isAnimating}");
+                return;
+            }
+
+            bool allSeen = seenPhotos.Count == initialBatchSize;
+            string loser1 = remainingPhotos[currentPairIndex];
+            string loser2 = remainingPhotos[currentPairIndex + 1];
+            losers?.Add(loser1);
+            losers?.Add(loser2);
+            seenPhotos.Add(loser1);
+            seenPhotos.Add(loser2);
+            if (allSeen)
+            {
+                reseenPhotos.Add(loser1);
+                reseenPhotos.Add(loser2);
+            }
+            remainingPhotos.RemoveAt(currentPairIndex + 1);
+            remainingPhotos.RemoveAt(currentPairIndex);
+            history.Push((loser1, false));
+            history.Push((loser2, false));
+
+            if (!skipAnimationsCheckBox.Checked)
+            {
+                isAnimating = true;
+                leftFeedbackBar.BackColor = Color.Red;
+                rightFeedbackBar.BackColor = Color.Red;
+                leftFeedbackBar.Visible = true;
+                rightFeedbackBar.Visible = true;
+                nonSelectedBox = null;
+
+                Console.WriteLine($"DeleteBothPhotos: Showing red bars at {DateTime.Now.Ticks / 10000}ms, leftImage={(pictureBoxLeft.Image == null ? "null" : "present")}, rightImage={(pictureBoxRight.Image == null ? "null" : "present")}");
                 feedbackTimer.Start();
             }
             else
@@ -1606,7 +1675,7 @@ namespace Picksy
             selectFolderButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
-            controlsPictureBox.Visible = true;
+            controlsPictureBox.Visible = false;
             selectFolderButton.BringToFront();
             saveAndQuitButton.Visible = false;
             thumbnailPanel.Visible = false;
