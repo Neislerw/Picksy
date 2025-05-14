@@ -1465,29 +1465,29 @@ namespace Picksy
                     var titleLabel = new Label
                     {
                         Text = titleMessage,
-                        Location = new Point(20, 30),
-                        Size = new Size(660, 40),
+                        Location = new Point(20, 60),
+                        Size = new Size(660, 60),
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White,
-                        Font = new Font("Montserrat SemiBold", 18F, FontStyle.Bold)
+                        Font = new Font("Montserrat SemiBold", 20F, FontStyle.Bold)
                     };
 
                     var statsLabel = new Label
                     {
                         Text = statsMessage,
-                        Location = new Point(20, 80),
-                        Size = new Size(660, 120),
+                        Location = new Point(20, 160),
+                        Size = new Size(660, 150),
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White,
-                        Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular)
+                        Font = new Font("Montserrat SemiBold", 16F, FontStyle.Regular)
                     };
 
                     var thanksLabel = new Label
                     {
                         Text = "Thanks for Using Picksy!",
-                        Location = new Point(20, 250),
+                        Location = new Point(20, 320),
                         Size = new Size(660, 50),
                         TextAlign = ContentAlignment.MiddleCenter,
                         BackColor = Color.Transparent,
@@ -1517,7 +1517,7 @@ namespace Picksy
                     {
                         Text = "Support Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(90, saveStateExists ? 290 : 310),
+                        Location = new Point(90, 400),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1540,7 +1540,7 @@ namespace Picksy
                     {
                         Text = "Share Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(270, saveStateExists ? 290 : 310),
+                        Location = new Point(270, 400),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1566,7 +1566,7 @@ namespace Picksy
                     {
                         Text = "Close",
                         Size = new Size(160, 60),
-                        Location = new Point(450, saveStateExists ? 290 : 310),
+                        Location = new Point(450, 400),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
