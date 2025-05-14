@@ -16,7 +16,6 @@
             if (disposing && (components != null))
             {
                 components.Dispose();
-                hoverTimer?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -34,11 +33,8 @@
             this.pictureBoxLeft = new System.Windows.Forms.PictureBox();
             this.pictureBoxRight = new System.Windows.Forms.PictureBox();
             this.remainingLabel = new System.Windows.Forms.Label();
-            this.instructionLabel = new System.Windows.Forms.Label();
             this.thumbnailPanel = new System.Windows.Forms.FlowLayoutPanel();
             this.menuStrip = new System.Windows.Forms.MenuStrip();
-            this.rotateClockwiseButton = new System.Windows.Forms.Button();
-            this.rotateCounterclockwiseButton = new System.Windows.Forms.Button();
             this.deletePromptLabel = new System.Windows.Forms.Label();
             this.settingsGroupBox = new System.Windows.Forms.GroupBox();
             this.skipAnimationsCheckBox = new System.Windows.Forms.CheckBox();
@@ -54,6 +50,7 @@
             this.batchSizeLabel = new System.Windows.Forms.Label();
             this.settingsHeaderLabel = new System.Windows.Forms.Label();
             this.logoPictureBox = new System.Windows.Forms.PictureBox();
+            this.controlsPictureBox = new System.Windows.Forms.PictureBox();
             this.toolTipLeft = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipRight = new System.Windows.Forms.ToolTip(this.components);
             this.saveAndQuitButton = new System.Windows.Forms.Button();
@@ -68,6 +65,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.batchSizeNumericUpDown)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.controlsPictureBox)).BeginInit();
             this.SuspendLayout();
             // 
             // selectFolderButton
@@ -109,23 +107,13 @@
             // 
             this.remainingLabel.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.remainingLabel.ForeColor = System.Drawing.Color.White;
-            this.remainingLabel.Location = new System.Drawing.Point(20, 650);
+            this.remainingLabel.Location = new System.Drawing.Point(20, 760);
             this.remainingLabel.Name = "remainingLabel";
             this.remainingLabel.Size = new System.Drawing.Size(960, 40);
             this.remainingLabel.TabIndex = 3;
             this.remainingLabel.Text = "Photos remaining: 0";
             this.remainingLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            // 
-            // instructionLabel
-            // 
-            this.instructionLabel.Font = new System.Drawing.Font("Montserrat SemiBold", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.instructionLabel.ForeColor = System.Drawing.Color.Gray;
-            this.instructionLabel.Location = new System.Drawing.Point(20, 690);
-            this.instructionLabel.Name = "instructionLabel";
-            this.instructionLabel.Size = new System.Drawing.Size(960, 80);
-            this.instructionLabel.TabIndex = 4;
-            this.instructionLabel.Text = "Controls: Click or use Left/Right to select, Up to keep both, Down to undo, Q/E to rotate, W to toggle full resolution, Space to delete all, Enter to keep all.";
-            this.instructionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.remainingLabel.Visible = false;
             // 
             // thumbnailPanel
             // 
@@ -147,34 +135,6 @@
             this.menuStrip.Size = new System.Drawing.Size(1000, 28);
             this.menuStrip.TabIndex = 8;
             this.menuStrip.Text = "menuStrip";
-            // 
-            // rotateClockwiseButton
-            // 
-            this.rotateClockwiseButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(26)))));
-            this.rotateClockwiseButton.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.rotateClockwiseButton.ForeColor = System.Drawing.Color.White;
-            this.rotateClockwiseButton.Location = new System.Drawing.Point(20, 474);
-            this.rotateClockwiseButton.Name = "rotateClockwiseButton";
-            this.rotateClockwiseButton.Size = new System.Drawing.Size(120, 40);
-            this.rotateClockwiseButton.TabIndex = 9;
-            this.rotateClockwiseButton.Text = "Rotate CW";
-            this.rotateClockwiseButton.UseVisualStyleBackColor = false;
-            this.rotateClockwiseButton.Visible = false;
-            this.rotateClockwiseButton.Click += new System.EventHandler(this.RotateClockwiseButton_Click);
-            // 
-            // rotateCounterclockwiseButton
-            // 
-            this.rotateCounterclockwiseButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(26)))));
-            this.rotateCounterclockwiseButton.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.rotateCounterclockwiseButton.ForeColor = System.Drawing.Color.White;
-            this.rotateCounterclockwiseButton.Location = new System.Drawing.Point(860, 474);
-            this.rotateCounterclockwiseButton.Name = "rotateCounterclockwiseButton";
-            this.rotateCounterclockwiseButton.Size = new System.Drawing.Size(120, 40);
-            this.rotateCounterclockwiseButton.TabIndex = 10;
-            this.rotateCounterclockwiseButton.Text = "Rotate CCW";
-            this.rotateCounterclockwiseButton.UseVisualStyleBackColor = false;
-            this.rotateCounterclockwiseButton.Visible = false;
-            this.rotateCounterclockwiseButton.Click += new System.EventHandler(this.RotateCounterclockwiseButton_Click);
             // 
             // deletePromptLabel
             // 
@@ -249,6 +209,8 @@
             // skipConfirmationCheckBox
             // 
             this.skipConfirmationCheckBox.AutoSize = true;
+            this.skipConfirmationCheckBox.Checked = true;
+            this.skipConfirmationCheckBox.CheckState = System.Windows.Forms.CheckState.Checked;
             this.skipConfirmationCheckBox.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.skipConfirmationCheckBox.ForeColor = System.Drawing.Color.White;
             this.skipConfirmationCheckBox.Location = new System.Drawing.Point(30, 290);
@@ -257,7 +219,6 @@
             this.skipConfirmationCheckBox.TabIndex = 7;
             this.skipConfirmationCheckBox.Text = "Skip Confirmation between batches";
             this.skipConfirmationCheckBox.UseVisualStyleBackColor = true;
-            this.skipConfirmationCheckBox.Checked = true;
             // 
             // batchTimingDescriptionLabel
             // 
@@ -299,12 +260,12 @@
             this.batchTimingNumericUpDown.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.batchTimingNumericUpDown.ForeColor = System.Drawing.Color.White;
             this.batchTimingNumericUpDown.Location = new System.Drawing.Point(450, 148);
-            this.batchTimingNumericUpDown.Maximum = 600;
-            this.batchTimingNumericUpDown.Minimum = 1;
+            this.batchTimingNumericUpDown.Maximum = new decimal(new int[] { 600, 0, 0, 0 });
+            this.batchTimingNumericUpDown.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             this.batchTimingNumericUpDown.Name = "batchTimingNumericUpDown";
             this.batchTimingNumericUpDown.Size = new System.Drawing.Size(80, 28);
             this.batchTimingNumericUpDown.TabIndex = 3;
-            this.batchTimingNumericUpDown.Value = 300;
+            this.batchTimingNumericUpDown.Value = new decimal(new int[] { 300, 0, 0, 0 });
             // 
             // batchTimingLabel
             // 
@@ -323,12 +284,12 @@
             this.batchSizeNumericUpDown.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.batchSizeNumericUpDown.ForeColor = System.Drawing.Color.White;
             this.batchSizeNumericUpDown.Location = new System.Drawing.Point(450, 68);
-            this.batchSizeNumericUpDown.Maximum = 100;
-            this.batchSizeNumericUpDown.Minimum = 2;
+            this.batchSizeNumericUpDown.Maximum = new decimal(new int[] { 100, 0, 0, 0 });
+            this.batchSizeNumericUpDown.Minimum = new decimal(new int[] { 2, 0, 0, 0 });
             this.batchSizeNumericUpDown.Name = "batchSizeNumericUpDown";
             this.batchSizeNumericUpDown.Size = new System.Drawing.Size(80, 28);
             this.batchSizeNumericUpDown.TabIndex = 1;
-            this.batchSizeNumericUpDown.Value = 2;
+            this.batchSizeNumericUpDown.Value = new decimal(new int[] { 2, 0, 0, 0 });
             // 
             // batchSizeLabel
             // 
@@ -361,6 +322,16 @@
             this.logoPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
             this.logoPictureBox.TabIndex = 18;
             this.logoPictureBox.TabStop = false;
+            // 
+            // controlsPictureBox
+            // 
+            this.controlsPictureBox.BackColor = System.Drawing.Color.Transparent;
+            this.controlsPictureBox.Location = new System.Drawing.Point(75, 520);
+            this.controlsPictureBox.Name = "controlsPictureBox";
+            this.controlsPictureBox.Size = new System.Drawing.Size(850, 200);
+            this.controlsPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.controlsPictureBox.TabIndex = 22;
+            this.controlsPictureBox.TabStop = false;
             // 
             // toolTipLeft
             // 
@@ -397,8 +368,8 @@
             this.copyrightLabel.Name = "copyrightLabel";
             this.copyrightLabel.Size = new System.Drawing.Size(150, 16);
             this.copyrightLabel.TabIndex = 20;
-            this.copyrightLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.copyrightLabel.Text = "\u00A9 2025 W.A. Neisler";
+            this.copyrightLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // batchProgressLabel
             // 
@@ -407,9 +378,10 @@
             this.batchProgressLabel.ForeColor = System.Drawing.Color.Gray;
             this.batchProgressLabel.Location = new System.Drawing.Point(220, 730);
             this.batchProgressLabel.Name = "batchProgressLabel";
-            this.batchProgressLabel.Size = new System.Drawing.Size(300, 16);
-            this.batchProgressLabel.TabIndex = 22;
+            this.batchProgressLabel.Size = new System.Drawing.Size(560, 16);
+            this.batchProgressLabel.TabIndex = 21;
             this.batchProgressLabel.Text = "Batch Progress: 0% Seen";
+            this.batchProgressLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.batchProgressLabel.Visible = false;
             // 
             // hoverTimer
@@ -422,16 +394,14 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(26)))));
             this.ClientSize = new System.Drawing.Size(1000, 800);
+            this.Controls.Add(this.controlsPictureBox);
             this.Controls.Add(this.batchProgressLabel);
             this.Controls.Add(this.copyrightLabel);
             this.Controls.Add(this.saveAndQuitButton);
             this.Controls.Add(this.logoPictureBox);
             this.Controls.Add(this.settingsGroupBox);
             this.Controls.Add(this.deletePromptLabel);
-            this.Controls.Add(this.rotateCounterclockwiseButton);
-            this.Controls.Add(this.rotateClockwiseButton);
             this.Controls.Add(this.thumbnailPanel);
-            this.Controls.Add(this.instructionLabel);
             this.Controls.Add(this.remainingLabel);
             this.Controls.Add(this.pictureBoxRight);
             this.Controls.Add(this.pictureBoxLeft);
@@ -452,8 +422,10 @@
             ((System.ComponentModel.ISupportInitialize)(this.batchTimingNumericUpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.batchSizeNumericUpDown)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.controlsPictureBox)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
+
         }
 
         #endregion
@@ -462,13 +434,11 @@
         private System.Windows.Forms.PictureBox pictureBoxLeft;
         private System.Windows.Forms.PictureBox pictureBoxRight;
         private System.Windows.Forms.Label remainingLabel;
-        private System.Windows.Forms.Label instructionLabel;
         private System.Windows.Forms.FlowLayoutPanel thumbnailPanel;
         private System.Windows.Forms.MenuStrip menuStrip;
-        private System.Windows.Forms.Button rotateClockwiseButton;
-        private System.Windows.Forms.Button rotateCounterclockwiseButton;
         private System.Windows.Forms.Label deletePromptLabel;
         private System.Windows.Forms.GroupBox settingsGroupBox;
+        private System.Windows.Forms.CheckBox skipAnimationsCheckBox;
         private System.Windows.Forms.ComboBox batchSelectionMethodComboBox;
         private System.Windows.Forms.Label batchSelectionMethodLabel;
         private System.Windows.Forms.CheckBox skipConfirmationCheckBox;
@@ -480,8 +450,8 @@
         private System.Windows.Forms.NumericUpDown batchSizeNumericUpDown;
         private System.Windows.Forms.Label batchSizeLabel;
         private System.Windows.Forms.Label settingsHeaderLabel;
-        private System.Windows.Forms.CheckBox skipAnimationsCheckBox;
         private System.Windows.Forms.PictureBox logoPictureBox;
+        private System.Windows.Forms.PictureBox controlsPictureBox;
         private System.Windows.Forms.ToolTip toolTipLeft;
         private System.Windows.Forms.ToolTip toolTipRight;
         private System.Windows.Forms.Button saveAndQuitButton;
