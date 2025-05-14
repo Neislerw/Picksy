@@ -57,25 +57,22 @@ namespace Picksy
             history = new Stack<(string? Loser, bool KeptBoth)>();
             photoRotations = new Dictionary<string, int>();
             batchSelectionMethodComboBox.Items.AddRange(new[] { "Auto", "By Name", "By Date Created", "By Date Modified", "By Date Taken" });
-            batchSelectionMethodComboBox.SelectedIndex = 0;
+            batchSelectionMethodComboBox.SelectedIndex = 0; // Default to "Auto"
             batchTimingNumericUpDown.Value = 300;
             pictureBoxLeft.Visible = false;
             pictureBoxRight.Visible = false;
-            rotateClockwiseButton.Visible = false;
-            rotateCounterclockwiseButton.Visible = false;
             saveAndQuitButton.Visible = false;
             thumbnailPanel.Visible = false;
             deletePromptLabel.Visible = false;
             remainingLabel.Visible = false;
-            instructionLabel.Visible = false;
             batchProgressLabel.Visible = false;
             selectFolderButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
+            controlsPictureBox.Visible = false;
             selectFolderButton.BringToFront();
             try
             {
-                // Load logo.ico from embedded resource
                 using (var iconStream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Picksy.Resources.logo.ico"))
                 {
                     if (iconStream != null)
@@ -84,7 +81,6 @@ namespace Picksy
                         throw new FileNotFoundException("Embedded resource logo.ico not found.");
                 }
 
-                // Load logo.png from embedded resource
                 using (var imageStream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Picksy.Resources.logo.png"))
                 {
                     if (imageStream != null)
@@ -92,10 +88,18 @@ namespace Picksy
                     else
                         throw new FileNotFoundException("Embedded resource logo.png not found.");
                 }
+
+                using (var controlsStream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Picksy.Resources.controls.png"))
+                {
+                    if (controlsStream != null)
+                        controlsPictureBox.Image = Image.FromStream(controlsStream);
+                    else
+                        throw new FileNotFoundException("Embedded resource controls.png not found.");
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading icon or logo: {ex.Message}", "Picksy Error");
+                MessageBox.Show($"Error loading icon, logo, or controls: {ex.Message}", "Picksy Error");
             }
             UpdateMainPageControlsPosition();
 
@@ -120,11 +124,9 @@ namespace Picksy
             this.Controls.Add(rightFeedbackBar);
 
             SetupButtonHover(selectFolderButton);
-            SetupButtonHover(rotateClockwiseButton);
-            SetupButtonHover(rotateCounterclockwiseButton);
             SetupButtonHover(saveAndQuitButton);
 
-            Console.WriteLine($"MainForm: Initialized with default batch selection method: {batchSelectionMethodComboBox.SelectedItem}");
+            Console.WriteLine($"MainForm: Initialized with default batch selection method: {batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "None"}");
         }
 
         private void SetupButtonHover(Button button)
@@ -198,7 +200,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(36, 36, 36),
                 Size = new Size(560, 10),
-                Location = new Point(220, 740),
+                Location = new Point(220, 730),
                 Visible = false
             };
             seenProgressBar = new Panel
@@ -214,7 +216,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(150, 150, 150),
                 Size = new Size(560, 10),
-                Location = new Point(220, 740),
+                Location = new Point(220, 730),
                 Visible = false
             };
             reseenProgressBar = new Panel
@@ -353,7 +355,8 @@ namespace Picksy
                 }
             }
         }
-                private bool PromptLoadSavedState(string stateFilePath, out (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod)? savedSettings)
+
+        private bool PromptLoadSavedState(string stateFilePath, out (int BatchSizeMinimum, int BatchTimingMaximum, bool IncludeSubfolders, string BatchSelectionMethod)? savedSettings)
         {
             savedSettings = null;
             bool isSessionCompleted = false;
@@ -468,9 +471,9 @@ namespace Picksy
 
                 int originalBatchPhotoCount = batches?.Sum(b => b.Count) ?? 0;
                 batches = batches?.Skip(currentBatchIndex)
-                                .Select(batch => batch.Where(validFilesFilter).ToList())
-                                .Where(batch => batch.Count >= savedSettings.BatchSizeMinimum || (isLoadingSession && batch.Any(f => currentBatch.Contains(f))))
-                                .ToList() ?? new List<List<string>>();
+                                 .Select(batch => batch.Where(validFilesFilter).ToList())
+                                 .Where(batch => batch.Count >= savedSettings.BatchSizeMinimum || (isLoadingSession && batch.Any(f => currentBatch.Contains(f))))
+                                 .ToList() ?? new List<List<string>>();
                 int newBatchPhotoCount = batches?.Sum(b => b.Count) ?? 0;
                 deletedPhotosCount += originalBatchPhotoCount - newBatchPhotoCount - originalCurrentBatchCount;
 
@@ -628,11 +631,9 @@ namespace Picksy
             deletePromptLabel.Visible = false;
             pictureBoxLeft.Visible = true;
             pictureBoxRight.Visible = true;
-            rotateClockwiseButton.Visible = true;
-            rotateCounterclockwiseButton.Visible = true;
             saveAndQuitButton.Visible = true;
             remainingLabel.Visible = true;
-            instructionLabel.Visible = true;
+            controlsPictureBox.Visible = true;
             batchProgressLabel.Visible = true;
             if (seenProgressContainer != null)
                 seenProgressContainer.Visible = true;
@@ -646,7 +647,8 @@ namespace Picksy
             rightFeedbackBar.Visible = false;
             UpdateTournamentUI();
         }
-                private void UpdateTournamentUI()
+
+        private void UpdateTournamentUI()
         {
             var startTime = DateTime.Now.Ticks / 10000;
             Console.WriteLine($"UpdateTournamentUI: Started at {startTime}ms");
@@ -876,7 +878,7 @@ namespace Picksy
 
         private void UpdatePictureBoxSizes()
         {
-            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - instructionLabel.Height - batchProgressLabel.Height - rotateClockwiseButton.Height - saveAndQuitButton.Height - copyrightLabel.Height - (seenProgressContainer?.Height ?? 0) - (reseenProgressContainer?.Height ?? 0) - 100;
+            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - batchProgressLabel.Height - saveAndQuitButton.Height - copyrightLabel.Height - controlsPictureBox.Height - (seenProgressContainer?.Height ?? 0) - (reseenProgressContainer?.Height ?? 0) - 100;
             int availableWidth = (ClientSize.Width - 40) / 2;
 
             pictureBoxLeft.SizeMode = PictureBoxSizeMode.Zoom;
@@ -886,27 +888,24 @@ namespace Picksy
             pictureBoxLeft.Location = new Point(20, menuStrip.Height + 20);
             pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 20, menuStrip.Height + 20);
 
-            // Feedback bars: 10px tall, same width as PictureBox, touching bottom
             int barHeight = 10;
             leftFeedbackBar.Size = new Size(availableWidth, barHeight);
-            leftFeedbackBar.Location = new Point(20, pictureBoxLeft.Bottom); // Touching bottom of PictureBox
+            leftFeedbackBar.Location = new Point(20, pictureBoxLeft.Bottom);
             rightFeedbackBar.Size = new Size(availableWidth, barHeight);
             rightFeedbackBar.Location = new Point(ClientSize.Width - availableWidth - 20, pictureBoxRight.Bottom);
 
-            rotateClockwiseButton.Location = new Point(20, pictureBoxLeft.Bottom + barHeight + 10);
-            rotateCounterclockwiseButton.Location = new Point(ClientSize.Width - rotateCounterclockwiseButton.Width - 20, pictureBoxLeft.Bottom + barHeight + 10);
             saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, pictureBoxLeft.Bottom + barHeight + 10);
-            remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, saveAndQuitButton.Bottom + 15);
-            instructionLabel.Location = new Point((ClientSize.Width - instructionLabel.Width) / 2, remainingLabel.Bottom + 15);
+            controlsPictureBox.Location = new Point((ClientSize.Width - controlsPictureBox.Width) / 2, saveAndQuitButton.Bottom + 15);
 
             int progressBarX = (ClientSize.Width - (seenProgressContainer?.Width ?? 560)) / 2;
             if (seenProgressContainer != null)
-                seenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25);
+                seenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
             if (reseenProgressContainer != null)
-                reseenProgressContainer.Location = new Point(progressBarX, instructionLabel.Bottom + 25);
-            batchProgressLabel.Location = new Point(progressBarX, instructionLabel.Bottom + 5);
+                reseenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
+            batchProgressLabel.Location = new Point(progressBarX, controlsPictureBox.Bottom + 2);
+            remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, (seenProgressContainer?.Bottom ?? controlsPictureBox.Bottom) + 15);
 
-            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, (reseenProgressContainer?.Bottom ?? ClientSize.Height) + 15);
+            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, remainingLabel.Bottom + 15);
             thumbnailPanel.Location = new Point(20, menuStrip.Height + 20);
             deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 20);
         }
@@ -971,26 +970,6 @@ namespace Picksy
             SelectPhoto(false);
         }
 
-        private void RotateClockwiseButton_Click(object sender, EventArgs e)
-        {
-            if (currentBatch == null) return;
-            foreach (var photo in currentBatch)
-            {
-                photoRotations[photo] = (photoRotations[photo] + 90) % 360;
-            }
-            UpdateTournamentUI();
-        }
-
-        private void RotateCounterclockwiseButton_Click(object sender, EventArgs e)
-        {
-            if (currentBatch == null) return;
-            foreach (var photo in currentBatch)
-            {
-                photoRotations[photo] = (photoRotations[photo] - 90 + 360) % 360;
-            }
-            UpdateTournamentUI();
-        }
-
         private void SaveAndQuitButton_Click(object sender, EventArgs e)
         {
             SaveStateToFile(true);
@@ -1021,7 +1000,7 @@ namespace Picksy
                 var filteredLosers = losers?.Where(validFilesFilter).ToList() ?? new List<string>();
 
                 var validFiles = new HashSet<string>(filteredRemainingPhotos.Concat(filteredLosers).Concat(filteredBatches.SelectMany(b => b)));
-                var filteredPhotoRotations = photoRotations.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                var filteredPhotoRotations = photoRotations?.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, int>();
 
                 var state = new
                 {
@@ -1318,11 +1297,8 @@ namespace Picksy
             pictureBoxRight.Image = null;
             pictureBoxLeft.Visible = false;
             pictureBoxRight.Visible = false;
-            rotateClockwiseButton.Visible = false;
-            rotateCounterclockwiseButton.Visible = false;
             saveAndQuitButton.Visible = false;
             remainingLabel.Visible = false;
-            instructionLabel.Visible = false;
             batchProgressLabel.Visible = false;
             if (seenProgressContainer != null)
                 seenProgressContainer.Visible = false;
@@ -1330,6 +1306,7 @@ namespace Picksy
                 reseenProgressContainer.Visible = false;
             leftFeedbackBar.Visible = false;
             rightFeedbackBar.Visible = false;
+            controlsPictureBox.Visible = true;
 
             ClearThumbnails();
             foreach (var loser in losers)
@@ -1499,7 +1476,7 @@ namespace Picksy
                     var statsLabel = new Label
                     {
                         Text = statsMessage,
-                        Location = new Point(20, 130),
+                        Location = new Point(20, 80),
                         Size = new Size(660, 120),
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
@@ -1525,9 +1502,9 @@ namespace Picksy
                         createSaveStateCheckBox = new CheckBox
                         {
                             Text = "Create savestate for future use",
-                            Location = new Point(200, 220), // Centered above thanksLabel
-                            Size = new Size(300, 30), // Narrower to fit text
-                            TextAlign = ContentAlignment.MiddleLeft, // Text close to checkbox
+                            Location = new Point(20, 220),
+                            Size = new Size(300, 30),
+                            TextAlign = ContentAlignment.MiddleLeft,
                             BackColor = Color.Transparent,
                             ForeColor = Color.White,
                             Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1540,7 +1517,7 @@ namespace Picksy
                     {
                         Text = "Support Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(90, saveStateExists ? 330 : 330),
+                        Location = new Point(90, saveStateExists ? 290 : 310),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1563,7 +1540,7 @@ namespace Picksy
                     {
                         Text = "Share Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(270, saveStateExists ? 330 : 330),
+                        Location = new Point(270, saveStateExists ? 290 : 310),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1589,7 +1566,7 @@ namespace Picksy
                     {
                         Text = "Close",
                         Size = new Size(160, 60),
-                        Location = new Point(450, saveStateExists ? 330 : 330),
+                        Location = new Point(450, saveStateExists ? 290 : 310),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1629,14 +1606,12 @@ namespace Picksy
             selectFolderButton.Visible = true;
             settingsGroupBox.Visible = true;
             logoPictureBox.Visible = true;
+            controlsPictureBox.Visible = true;
             selectFolderButton.BringToFront();
-            rotateClockwiseButton.Visible = false;
-            rotateCounterclockwiseButton.Visible = false;
             saveAndQuitButton.Visible = false;
             thumbnailPanel.Visible = false;
             deletePromptLabel.Visible = false;
             remainingLabel.Visible = false;
-            instructionLabel.Visible = false;
             batchProgressLabel.Visible = false;
             if (seenProgressContainer != null)
                 seenProgressContainer.Visible = false;
