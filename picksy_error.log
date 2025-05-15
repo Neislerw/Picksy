@@ -5,3 +5,7 @@ Timestamp: 5/10/2025 9:49:50 AM[5/15/2025 3:33:13 PM] Error loading embedded fon
    at Picksy.MainForm.LoadEmbeddedFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 152
 [5/15/2025 3:33:19 PM] Error applying embedded font: System.IndexOutOfRangeException: Index was outside the bounds of the array.
    at Picksy.MainForm.ApplyMontserratFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 182
+[5/15/2025 3:36:20 PM] Error loading embedded font: System.IO.FileNotFoundException: Embedded font resource 'Montserrat-SemiBold.ttf' not found.
+   at Picksy.MainForm.LoadEmbeddedFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 152
+[5/15/2025 3:36:20 PM] Error applying embedded font: System.IndexOutOfRangeException: Index was outside the bounds of the array.
+   at Picksy.MainForm.ApplyMontserratFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 182

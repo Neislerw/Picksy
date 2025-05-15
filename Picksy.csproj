@@ -16,5 +16,6 @@
     <EmbeddedResource Include="Resources\logo.ico" />
     <EmbeddedResource Include="Resources\logo.png" />
     <EmbeddedResource Include="Resources\controls.png" />
+    <EmbeddedResource Include="Resources\Montserrat-SemiBold.ttf" />
   </ItemGroup>
 </Project>
