@@ -873,8 +873,9 @@ namespace Picksy
             controlsPictureBox.Size = new Size(controlsWidth, controlsHeight);
             controlsPictureBox.Location = new Point((ClientSize.Width - controlsWidth) / 2, pictureBoxLeft.Bottom + barHeight);
 
+            // Move progress bar and remaining label down by 20 pixels
             int progressBarX = (ClientSize.Width - 560) / 2;
-            int progressBarY = controlsPictureBox.Bottom + 5;
+            int progressBarY = controlsPictureBox.Bottom + 25; // Increased from 5 to 25
             if (seenProgressContainer != null)
             {
                 seenProgressContainer.Size = new Size(560, 10);
@@ -888,7 +889,9 @@ namespace Picksy
             batchProgressLabel.Location = new Point(progressBarX, progressBarY - 15);
 
             remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, progressBarY + 15);
-            saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, remainingLabel.Bottom + 5);
+
+            // Move Save and Quit button to bottom right
+            saveAndQuitButton.Location = new Point(ClientSize.Width - saveAndQuitButton.Width - 20, ClientSize.Height - saveAndQuitButton.Height - 25);
 
             copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, ClientSize.Height - copyrightLabel.Height - 5);
             thumbnailPanel.Location = new Point(20, topBuffer + 20);
