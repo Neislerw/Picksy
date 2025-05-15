@@ -1,4 +1,7 @@
 Error loading session: System.InvalidOperationException: Some saved photos are missing or inaccessible.
    at Picksy.MainForm.LoadSession(String stateFilePath, ValueTuple`4 savedSettings) in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 282
 File: C:\Users\Will\Documents\Coding\Picksy Photos\Select\picksy_state.json
-Timestamp: 5/10/2025 9:49:50 AM
+Timestamp: 5/10/2025 9:49:50 AM[5/15/2025 3:33:13 PM] Error loading embedded font: System.IO.FileNotFoundException: Embedded font resource 'Montserrat-SemiBold.ttf' not found.
+   at Picksy.MainForm.LoadEmbeddedFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 152
+[5/15/2025 3:33:19 PM] Error applying embedded font: System.IndexOutOfRangeException: Index was outside the bounds of the array.
+   at Picksy.MainForm.ApplyMontserratFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 182

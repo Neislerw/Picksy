@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.Web;
 using System.Drawing.Imaging;
+using System.Drawing.Text;
 
 namespace Picksy
 {
@@ -23,6 +24,7 @@ namespace Picksy
         private string? currentFolderPath;
         private int currentBatchIndex;
         private Stack<(string? Loser, bool KeptBoth)> history;
+        private PrivateFontCollection fontCollection;
         private Dictionary<string, int> photoRotations;
         private bool showFullResolution = false;
         private int initialFileCount = 0;
@@ -32,7 +34,6 @@ namespace Picksy
         private int initialBatchSize = 0;
         private HashSet<string> seenPhotos = new HashSet<string>();
         private HashSet<string> reseenPhotos = new HashSet<string>();
-        private HashSet<string> keptPhotos = new HashSet<string>();
 
         private Panel? seenProgressContainer;
         private Panel? seenProgressBar;
@@ -51,12 +52,21 @@ namespace Picksy
         private Panel rightFeedbackBar;
         private PictureBox? nonSelectedBox;
         private bool isAnimating;
+        
 
         public MainForm()
         {
             InitializeComponent();
             history = new Stack<(string? Loser, bool KeptBoth)>();
             photoRotations = new Dictionary<string, int>();
+            fontCollection = new PrivateFontCollection();
+
+            // Load embedded font
+            LoadEmbeddedFont();
+
+            // Apply font to form and controls
+            ApplyMontserratFont();
+
             batchSelectionMethodComboBox.Items.AddRange(new[] { "Auto", "By Name", "By Date Created", "By Date Modified", "By Date Taken" });
             batchSelectionMethodComboBox.SelectedIndex = 0; // Default to "Auto"
             batchTimingNumericUpDown.Value = 300;
@@ -72,6 +82,7 @@ namespace Picksy
             logoPictureBox.Visible = true;
             controlsPictureBox.Visible = false;
             selectFolderButton.BringToFront();
+            
             try
             {
                 using (var iconStream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Picksy.Resources.logo.ico"))
@@ -129,7 +140,80 @@ namespace Picksy
 
             Console.WriteLine($"MainForm: Initialized with default batch selection method: {batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "None"}");
         }
+        private void LoadEmbeddedFont()
+        {
+            try
+            {
+                // Load the Montserrat SemiBold font from embedded resource
+                using (var fontStream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("Picksy.Resources.Montserrat-SemiBold.ttf"))
+                {
+                    if (fontStream == null)
+                    {
+                        throw new FileNotFoundException("Embedded font resource 'Montserrat-SemiBold.ttf' not found.");
+                    }
 
+                    byte[] fontData = new byte[fontStream.Length];
+                    fontStream.Read(fontData, 0, (int)fontStream.Length);
+                    IntPtr fontPtr = System.Runtime.InteropServices.Marshal.AllocCoTaskMem(fontData.Length);
+                    System.Runtime.InteropServices.Marshal.Copy(fontData, 0, fontPtr, fontData.Length);
+                    fontCollection.AddMemoryFont(fontPtr, fontData.Length);
+                    System.Runtime.InteropServices.Marshal.FreeCoTaskMem(fontPtr);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading embedded font: {ex.Message}. Falling back to default font.", "Picksy Error");
+                try
+                {
+                    File.AppendAllText("picksy_error.log", $"[{DateTime.Now}] Error loading embedded font: {ex}\n");
+                }
+                catch
+                {
+                    Console.WriteLine($"Error loading embedded font: {ex}");
+                }
+            }
+        }
+
+        private void ApplyMontserratFont()
+        {
+            try
+            {
+                // Create Montserrat SemiBold font
+                Font montserratSemiBold12 = new Font(fontCollection.Families[0], 12F, FontStyle.Regular);
+                Font montserratSemiBold16 = new Font(fontCollection.Families[0], 16F, FontStyle.Regular);
+                Font montserratSemiBold20 = new Font(fontCollection.Families[0], 20F, FontStyle.Bold);
+                Font montserratSemiBold24 = new Font(fontCollection.Families[0], 24F, FontStyle.Bold);
+
+                // Apply to form
+                this.Font = montserratSemiBold12;
+
+                // Apply to specific controls
+                selectFolderButton.Font = montserratSemiBold12;
+                saveAndQuitButton.Font = montserratSemiBold12;
+                batchSelectionMethodComboBox.Font = montserratSemiBold12;
+                batchSizeNumericUpDown.Font = montserratSemiBold12;
+                batchTimingNumericUpDown.Font = montserratSemiBold12;
+                includeSubfoldersCheckBox.Font = montserratSemiBold12;
+                skipAnimationsCheckBox.Font = montserratSemiBold12;
+                skipConfirmationCheckBox.Font = montserratSemiBold12;
+                remainingLabel.Font = montserratSemiBold12;
+                batchProgressLabel.Font = montserratSemiBold12;
+                deletePromptLabel.Font = montserratSemiBold12;
+                copyrightLabel.Font = montserratSemiBold12;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying embedded font: {ex.Message}. Using default font.", "Picksy Error");
+                try
+                {
+                    File.AppendAllText("picksy_error.log", $"[{DateTime.Now}] Error applying embedded font: {ex}\n");
+                }
+                catch
+                {
+                    Console.WriteLine($"Error applying embedded font: {ex}");
+                }
+            }
+        }
         private void SetupButtonHover(Button button)
         {
             button.BackColor = baseColor;
@@ -201,7 +285,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(36, 36, 36),
                 Size = new Size(560, 10),
-                Location = new Point(220, 650),
+                Location = new Point(220, 730),
                 Visible = false
             };
             seenProgressBar = new Panel
@@ -217,7 +301,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(150, 150, 150),
                 Size = new Size(560, 10),
-                Location = new Point(220, 650),
+                Location = new Point(220, 730),
                 Visible = false
             };
             reseenProgressBar = new Panel
@@ -325,10 +409,9 @@ namespace Picksy
                         initialFileCount = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
                             .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                             .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
-                            .Where(f => !keptPhotos.Contains(f))
                             .Count();
                         var batchMethod = Enum.Parse<BatchSelectionMethod>(batchSelectionMethod.Replace(" ", ""));
-                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchMethod, debugLogging: false, keptPhotos: keptPhotos);
+                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchMethod, debugLogging: false);
                         batches = grouper.GroupPhotos(dialog.SelectedPath);
                         currentBatchIndex = 0;
                         totalBatchPhotos = 0;
@@ -488,38 +571,74 @@ namespace Picksy
                     currentBatchIndex = 0;
                 }
 
-                keptPhotos = state.TryGetValue("KeptPhotos", out var keptPhotosElement)
-                    ? new HashSet<string>(keptPhotosElement.Deserialize<List<string>>() ?? new List<string>())
-                    : new HashSet<string>();
-
                 var validFiles = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
                 photoRotations = photoRotations?.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, int>();
-                keptPhotos = keptPhotos.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToHashSet();
 
-                // Filter out kept photos from all batches and current batch
-                if (batches != null)
+                bool isSessionCompleted = batches == null || batches.Count == 0 || currentBatch == null || currentBatch.Count == 0 || remainingPhotos == null || remainingPhotos.Count == 0 || losers == null || losers.Count == 0 || currentBatchIndex >= batches.Count;
+                if (isSessionCompleted)
                 {
-                    batches = batches.Select(batch => batch.Where(f => !keptPhotos.Contains(f)).ToList())
-                                   .Where(batch => batch.Count >= savedSettings.BatchSizeMinimum)
-                                   .ToList();
+                    batches = new List<List<string>>();
+                    currentBatch = new List<string>();
+                    remainingPhotos = new List<string>();
+                    losers = new List<string>();
+                    currentBatchIndex = 0;
+                    currentPairIndex = 0;
                 }
-                if (currentBatch != null)
+                else if (currentBatch != null && currentBatch.Count < savedSettings.BatchSizeMinimum && batches != null && batches.Count > 0)
                 {
-                    currentBatch = currentBatch.Where(f => !keptPhotos.Contains(f)).ToList();
-                }
-                if (remainingPhotos != null)
-                {
-                    remainingPhotos = remainingPhotos.Where(f => !keptPhotos.Contains(f)).ToList();
-                }
-                if (losers != null)
-                {
-                    losers = losers.Where(f => !keptPhotos.Contains(f)).ToList();
+                    currentBatch = new List<string>(batches[0]);
+                    remainingPhotos = new List<string>(currentBatch);
+                    currentPairIndex = 0;
                 }
 
-                // Update total batch photos count
+                var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
+                var searchOption = savedSettings.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+                var allPhotos = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
+                    .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                    .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
+                    .ToList();
+                var processedPhotos = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
+                var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
+
+                if (newPhotos.Count > 0)
+                {
+                    var batchMethod = Enum.Parse<BatchSelectionMethod>(savedSettings.BatchSelectionMethod.Replace(" ", ""));
+                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, batchMethod, debugLogging: false);
+                    var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
+                    newBatches = newBatches.Where(b => b.Count >= savedSettings.BatchSizeMinimum).ToList();
+                    if (newBatches.Any())
+                    {
+                        if (batches == null || batches.Count == 0)
+                        {
+                            batches = newBatches;
+                            currentBatchIndex = 0;
+                            if (!isSessionCompleted)
+                            {
+                                currentBatch = new List<string>(batches[0]);
+                                remainingPhotos = new List<string>(currentBatch);
+                                currentPairIndex = 0;
+                            }
+                        }
+                        else
+                        {
+                            batches.AddRange(newBatches);
+                        }
+                        totalBatchPhotos += newBatches.Sum(b => b.Count);
+                        initialFileCount += newPhotos.Count;
+                    }
+                    try
+                    {
+                        File.AppendAllText("picksy_debug.log", $"[{DateTime.Now}] LoadSession: Found {newPhotos.Count} new photos, grouped into {newBatches.Count} valid batches.\n");
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"Debug: Found {newPhotos.Count} new photos, grouped into {newBatches.Count} valid batches.");
+                    }
+                }
+
                 totalBatchPhotos = (batches?.Sum(b => b.Count) ?? 0) + (currentBatch?.Count ?? 0);
 
-                if (batches != null && batches.Count > 0 && currentBatch != null)
+                if (batches != null && batches.Count > 0 && currentBatch != null && currentBatch.Count >= savedSettings.BatchSizeMinimum)
                 {
                     isLoadingSession = true;
                     try
@@ -844,25 +963,15 @@ namespace Picksy
 
         private void UpdatePictureBoxSizes()
         {
-            int topBuffer = 5;
+            int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - batchProgressLabel.Height - saveAndQuitButton.Height - copyrightLabel.Height - controlsPictureBox.Height - (seenProgressContainer?.Height ?? 0) - (reseenProgressContainer?.Height ?? 0) - 100;
             int availableWidth = (ClientSize.Width - 40) / 2;
-
-            // Fixed size for controlsPictureBox
-            int controlsWidth = 800;
-            int controlsHeight = 131; // Maintain ~6.6:1 aspect ratio
-
-            // Calculate max photo height to fit all elements without overlap
-            int totalFixedHeight = topBuffer + 10 /* feedback bar */ + 5 /* gap */ + controlsHeight + 5 /* gap */ + 
-                                  (seenProgressContainer?.Height ?? 10) + 5 /* gap */ + remainingLabel.Height + 
-                                  5 /* gap */ + saveAndQuitButton.Height + 5 /* gap */ + copyrightLabel.Height;
-            int availableHeight = Math.Max(100, ClientSize.Height - totalFixedHeight);
 
             pictureBoxLeft.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxRight.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxLeft.Size = new Size(availableWidth, availableHeight);
             pictureBoxRight.Size = new Size(availableWidth, availableHeight);
-            pictureBoxLeft.Location = new Point(20, topBuffer);
-            pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 20, topBuffer);
+            pictureBoxLeft.Location = new Point(20, menuStrip.Height + 20);
+            pictureBoxRight.Location = new Point(ClientSize.Width - availableWidth - 20, menuStrip.Height + 20);
 
             int barHeight = 10;
             leftFeedbackBar.Size = new Size(availableWidth, barHeight);
@@ -870,31 +979,19 @@ namespace Picksy
             rightFeedbackBar.Size = new Size(availableWidth, barHeight);
             rightFeedbackBar.Location = new Point(ClientSize.Width - availableWidth - 20, pictureBoxRight.Bottom);
 
-            controlsPictureBox.Size = new Size(controlsWidth, controlsHeight);
-            controlsPictureBox.Location = new Point((ClientSize.Width - controlsWidth) / 2, pictureBoxLeft.Bottom + barHeight);
+            saveAndQuitButton.Location = new Point((ClientSize.Width - saveAndQuitButton.Width) / 2, pictureBoxLeft.Bottom + barHeight + 10);
+            controlsPictureBox.Location = new Point((ClientSize.Width - controlsPictureBox.Width) / 2, saveAndQuitButton.Bottom + 15);
 
-            // Move progress bar and remaining label down by 20 pixels
-            int progressBarX = (ClientSize.Width - 560) / 2;
-            int progressBarY = controlsPictureBox.Bottom + 25; // Increased from 5 to 25
+            int progressBarX = (ClientSize.Width - (seenProgressContainer?.Width ?? 560)) / 2;
             if (seenProgressContainer != null)
-            {
-                seenProgressContainer.Size = new Size(560, 10);
-                seenProgressContainer.Location = new Point(progressBarX, progressBarY);
-            }
+                seenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
             if (reseenProgressContainer != null)
-            {
-                reseenProgressContainer.Size = new Size(560, 10);
-                reseenProgressContainer.Location = new Point(progressBarX, progressBarY);
-            }
-            batchProgressLabel.Location = new Point(progressBarX, progressBarY - 15);
+                reseenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
+            batchProgressLabel.Location = new Point(progressBarX, controlsPictureBox.Bottom + 2);
+            remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, (seenProgressContainer?.Bottom ?? controlsPictureBox.Bottom) + 15);
 
-            remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, progressBarY + 15);
-
-            // Move Save and Quit button to bottom right
-            saveAndQuitButton.Location = new Point(ClientSize.Width - saveAndQuitButton.Width - 20, ClientSize.Height - saveAndQuitButton.Height - 25);
-
-            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, ClientSize.Height - copyrightLabel.Height - 5);
-            thumbnailPanel.Location = new Point(20, topBuffer + 20);
+            copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, remainingLabel.Bottom + 15);
+            thumbnailPanel.Location = new Point(20, menuStrip.Height + 20);
             deletePromptLabel.Location = new Point(20, thumbnailPanel.Bottom + 20);
         }
 
@@ -961,7 +1058,7 @@ namespace Picksy
         private void SaveAndQuitButton_Click(object sender, EventArgs e)
         {
             SaveStateToFile(true);
-            ResetUI();
+            Application.Exit();
         }
 
         private void SaveStateToFile(bool showConfirmation)
@@ -1006,8 +1103,7 @@ namespace Picksy
                     BatchSizeMinimum = (int)batchSizeNumericUpDown.Value,
                     BatchTimingMaximum = (int)batchTimingNumericUpDown.Value,
                     IncludeSubfolders = includeSubfoldersCheckBox.Checked,
-                    BatchSelectionMethod = batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "Auto",
-                    KeptPhotos = keptPhotos.Where(validFilesFilter).ToList()
+                    BatchSelectionMethod = batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "Auto"
                 };
                 string stateFilePath = Path.Combine(currentFolderPath, "picksy_state.json");
                 File.WriteAllText(stateFilePath, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
@@ -1049,13 +1145,6 @@ namespace Picksy
                 }
                 else if (keyData == Keys.Down)
                 {
-                    Console.WriteLine($"ProcessCmdKey: Down key triggered at {DateTime.Now.Ticks / 10000}ms");
-                    DeleteBothPhotos();
-                    return true;
-                }
-                else if (keyData == Keys.Z)
-                {
-                    Console.WriteLine($"ProcessCmdKey: Z key triggered at {DateTime.Now.Ticks / 10000}ms");
                     UndoLastAction();
                     return true;
                 }
@@ -1176,16 +1265,12 @@ namespace Picksy
             }
 
             bool allSeen = seenPhotos.Count == initialBatchSize;
-            string photo1 = remainingPhotos[currentPairIndex];
-            string photo2 = remainingPhotos[currentPairIndex + 1];
-            keptPhotos.Add(photo1);
-            keptPhotos.Add(photo2);
-            seenPhotos.Add(photo1);
-            seenPhotos.Add(photo2);
+            seenPhotos.Add(remainingPhotos[currentPairIndex]);
+            seenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
             if (allSeen)
             {
-                reseenPhotos.Add(photo1);
-                reseenPhotos.Add(photo2);
+                reseenPhotos.Add(remainingPhotos[currentPairIndex]);
+                reseenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
             }
             history.Push((null, true));
             currentPairIndex += 2;
@@ -1200,49 +1285,6 @@ namespace Picksy
                 nonSelectedBox = null;
 
                 Console.WriteLine($"KeepBothPhotos: Showing green bars at {DateTime.Now.Ticks / 10000}ms, leftImage={(pictureBoxLeft.Image == null ? "null" : "present")}, rightImage={(pictureBoxRight.Image == null ? "null" : "present")}");
-                feedbackTimer.Start();
-            }
-            else
-            {
-                UpdateTournamentUI();
-            }
-        }
-
-        private void DeleteBothPhotos()
-        {
-            if (remainingPhotos == null || currentPairIndex + 1 >= remainingPhotos.Count || isAnimating)
-            {
-                Console.WriteLine($"DeleteBothPhotos: Blocked - remainingPhotos={(remainingPhotos == null ? "null" : remainingPhotos.Count.ToString())}, isAnimating={isAnimating}");
-                return;
-            }
-
-            bool allSeen = seenPhotos.Count == initialBatchSize;
-            string loser1 = remainingPhotos[currentPairIndex];
-            string loser2 = remainingPhotos[currentPairIndex + 1];
-            losers?.Add(loser1);
-            losers?.Add(loser2);
-            seenPhotos.Add(loser1);
-            seenPhotos.Add(loser2);
-            if (allSeen)
-            {
-                reseenPhotos.Add(loser1);
-                reseenPhotos.Add(loser2);
-            }
-            remainingPhotos.RemoveAt(currentPairIndex + 1);
-            remainingPhotos.RemoveAt(currentPairIndex);
-            history.Push((loser1, false));
-            history.Push((loser2, false));
-
-            if (!skipAnimationsCheckBox.Checked)
-            {
-                isAnimating = true;
-                leftFeedbackBar.BackColor = Color.Red;
-                rightFeedbackBar.BackColor = Color.Red;
-                leftFeedbackBar.Visible = true;
-                rightFeedbackBar.Visible = true;
-                nonSelectedBox = null;
-
-                Console.WriteLine($"DeleteBothPhotos: Showing red bars at {DateTime.Now.Ticks / 10000}ms, leftImage={(pictureBoxLeft.Image == null ? "null" : "present")}, rightImage={(pictureBoxRight.Image == null ? "null" : "present")}");
                 feedbackTimer.Start();
             }
             else
@@ -1513,14 +1555,14 @@ namespace Picksy
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White,
-                        Font = new Font("Montserrat SemiBold", 20F, FontStyle.Bold)
+                        Font = new Font("Montserrat SemiBold", 22F, FontStyle.Bold)
                     };
 
                     var statsLabel = new Label
                     {
                         Text = statsMessage,
                         Location = new Point(20, 160),
-                        Size = new Size(660, 150),
+                        Size = new Size(660, 100),
                         TextAlign = ContentAlignment.TopCenter,
                         BackColor = Color.Transparent,
                         ForeColor = Color.White,
@@ -1530,7 +1572,7 @@ namespace Picksy
                     var thanksLabel = new Label
                     {
                         Text = "Thanks for Using Picksy!",
-                        Location = new Point(20, 320),
+                        Location = new Point(20, 260),
                         Size = new Size(660, 50),
                         TextAlign = ContentAlignment.MiddleCenter,
                         BackColor = Color.Transparent,
@@ -1545,7 +1587,7 @@ namespace Picksy
                         createSaveStateCheckBox = new CheckBox
                         {
                             Text = "Create savestate for future use",
-                            Location = new Point(20, 220),
+                            Location = new Point((form.Width - 300) / 2, 430),
                             Size = new Size(300, 30),
                             TextAlign = ContentAlignment.MiddleLeft,
                             BackColor = Color.Transparent,
@@ -1560,7 +1602,7 @@ namespace Picksy
                     {
                         Text = "Support Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(90, 400),
+                        Location = new Point(90, 350),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1583,7 +1625,7 @@ namespace Picksy
                     {
                         Text = "Share Picksy",
                         Size = new Size(160, 60),
-                        Location = new Point(270, 400),
+                        Location = new Point(270, 350),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1609,7 +1651,7 @@ namespace Picksy
                     {
                         Text = "Close",
                         Size = new Size(160, 60),
-                        Location = new Point(450, 400),
+                        Location = new Point(450, 350),
                         BackColor = baseColor,
                         ForeColor = Color.White,
                         Font = new Font("Montserrat SemiBold", 12F, FontStyle.Regular),
@@ -1632,26 +1674,7 @@ namespace Picksy
                     form.Controls.Add(shareButton);
                     form.Controls.Add(closeButton);
 
-                    pictureBoxLeft.Image?.Dispose();
-                    pictureBoxRight.Image?.Dispose();
-                    pictureBoxLeft.Image = null;
-                    pictureBoxRight.Image = null;
-                    pictureBoxLeft.Visible = false;
-                    pictureBoxRight.Visible = false;
-                    saveAndQuitButton.Visible = false;
-                    remainingLabel.Visible = false;
-                    batchProgressLabel.Visible = false;
-                    if (seenProgressContainer != null)
-                        seenProgressContainer.Visible = false;
-                    if (reseenProgressContainer != null)
-                        reseenProgressContainer.Visible = false;
-                    leftFeedbackBar.Visible = false;
-                    rightFeedbackBar.Visible = false;
-                    controlsPictureBox.Visible = false;
-
                     form.ShowDialog(this);
-                    ResetUI();
-                    controlsPictureBox.Visible = false;  // Ensure controls stay hidden after ResetUI
                 }
             }
         }
