@@ -151,3 +151,51 @@ Batch grouping results:
 Initial batches created: 1
 Valid batches (after minimum size filter): 1
 [5/15/2025 6:25:59 PM] LoadSession: Found 3 new photos, grouped into 1 valid batches.
+
+[5/15/2025 6:28:25 PM] LoadSession Debug:
+Total photos in folder: 2
+Processed photos count: 0
+New photos found: 2
+New photos list:
+- 20200206_162100.jpg
+- 20200301_074154.jpg
+
+Batch grouping results:
+Initial batches created: 0
+Valid batches (after minimum size filter): 0
+No valid batches created. Possible reasons:
+- Minimum batch size: 2
+- Maximum timing: 300 seconds
+- Batch selection method: Auto
+- Include subfolders: False
+[5/15/2025 6:28:25 PM] LoadSession: Found 2 new photos, grouped into 0 valid batches.
+
+[5/15/2025 6:28:59 PM] LoadSession Debug:
+Total photos in folder: 19
+Processed photos count: 0
+New photos found: 19
+New photos list:
+- 2.jpg
+- 20241218_172511.jpg
+- 20241221_115550.jpg
+- 20250122_084727.jpg
+- 523.jpg
+- aflkja.jpg
+- d;lkf.jpg
+- dfakljdhf.jpg
+- dfl;kjasd;lkf.jpg
+- dkjfs.jpg
+- dklfjhs.jpg
+- fdsajflkds.jpg
+- fgadsfg.jpg
+- fgsfgsh.jpg
+- fkasdj;f.jpg
+- hgffg.jpg
+- rhgfg.jpg
+- sdkjfh.jpg
+- sfdjs.jpg
+
+Batch grouping results:
+Initial batches created: 4
+Valid batches (after minimum size filter): 4
+[5/15/2025 6:28:59 PM] LoadSession: Found 19 new photos, grouped into 4 valid batches.

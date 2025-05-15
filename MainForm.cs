@@ -285,7 +285,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(36, 36, 36),
                 Size = new Size(560, 10),
-                Location = new Point(220, 730),
+                Location = new Point(220, 780),
                 Visible = false
             };
             seenProgressBar = new Panel
@@ -301,7 +301,7 @@ namespace Picksy
             {
                 BackColor = Color.FromArgb(150, 150, 150),
                 Size = new Size(560, 10),
-                Location = new Point(220, 730),
+                Location = new Point(220, 780),
                 Visible = false
             };
             reseenProgressBar = new Panel
@@ -1035,7 +1035,8 @@ namespace Picksy
                 seenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
             if (reseenProgressContainer != null)
                 reseenProgressContainer.Location = new Point(progressBarX, controlsPictureBox.Bottom + 25);
-            batchProgressLabel.Location = new Point(progressBarX, controlsPictureBox.Bottom + 2);
+            batchProgressLabel.Size = new Size(560, 40);
+            batchProgressLabel.Location = new Point(progressBarX, controlsPictureBox.Bottom - 10);
             remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, (seenProgressContainer?.Bottom ?? controlsPictureBox.Bottom) + 15);
 
             copyrightLabel.Location = new Point((ClientSize.Width - copyrightLabel.Width) / 2, remainingLabel.Bottom + 15);
