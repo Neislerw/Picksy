@@ -22,111 +22,14 @@ namespace Picksy
 {
     public partial class MainForm : Form
     {
-        private int currentIndex = 0;
-        private List<string> processedFiles = new();
-        private string currentFolderPath = string.Empty;
-        private List<string> currentBatch = new();
+        // ... existing fields ...
+
         private bool isMtpDevice = false;
         private string? mtpDeviceId;
         private string? mtpDeviceName;
         private StorageFolder? mtpDeviceFolder;
 
-        public MainForm()
-        {
-            InitializeComponent();
-        }
-
-        private void SelectFolderButton_Click(object sender, EventArgs e)
-        {
-            using var dialog = new Form
-            {
-                Text = "Select Source",
-                Size = new Size(300, 150),
-                StartPosition = FormStartPosition.CenterParent,
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                MaximizeBox = false,
-                MinimizeBox = false
-            };
-
-            var localButton = new Button
-            {
-                Text = "Local Folder",
-                Dock = DockStyle.Top,
-                Height = 40,
-                Font = new Font("Segoe UI", 12F)
-            };
-
-            var mtpButton = new Button
-            {
-                Text = "Phone/Device",
-                Dock = DockStyle.Bottom,
-                Height = 40,
-                Font = new Font("Segoe UI", 12F)
-            };
-
-            localButton.Click += (s, args) =>
-            {
-                dialog.DialogResult = DialogResult.OK;
-                SelectLocalFolder();
-            };
-
-            mtpButton.Click += async (s, args) =>
-            {
-                dialog.DialogResult = DialogResult.OK;
-                if (await SelectMtpDevice())
-                {
-                    await ProcessMtpDevice();
-                }
-            };
-
-            dialog.Controls.Add(localButton);
-            dialog.Controls.Add(mtpButton);
-            dialog.ShowDialog();
-        }
-
-        private void PictureBoxLeft_Click(object sender, EventArgs e)
-        {
-            if (currentBatch != null && currentBatch.Count > 0)
-            {
-                DeleteCurrentBatch();
-            }
-        }
-
-        private void PictureBoxRight_Click(object sender, EventArgs e)
-        {
-            if (currentBatch != null && currentBatch.Count > 0)
-            {
-                currentBatch.Clear();
-                UpdateBatchLabel();
-                LoadNextBatch();
-            }
-        }
-
-        private void HoverTimer_Tick(object sender, EventArgs e)
-        {
-            // Implementation for hover timer
-        }
-
-        private void UpdateBatchLabel()
-        {
-            // Implementation for updating batch label
-        }
-
-        private void LoadNextBatch()
-        {
-            // Implementation for loading next batch
-        }
-
-        private async Task LoadImages()
-        {
-            // Implementation for loading images
-        }
-
-        private bool IsImageFile(string fileName)
-        {
-            string ext = Path.GetExtension(fileName).ToLower();
-            return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".bmp";
-        }
+        // ... existing methods ...
 
         private async Task SaveStateToFile(bool showConfirmation = true)
         {

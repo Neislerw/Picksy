@@ -79,51 +79,54 @@
             this.selectFolderButton.TabIndex = 0;
             this.selectFolderButton.Text = "Select Image Folder";
             this.selectFolderButton.UseVisualStyleBackColor = false;
+            this.selectFolderButton.Visible = true;
             this.selectFolderButton.Click += new System.EventHandler(this.SelectFolderButton_Click);
             // 
             // pictureBoxLeft
             // 
             this.pictureBoxLeft.BackColor = System.Drawing.Color.Transparent;
-            this.pictureBoxLeft.Location = new System.Drawing.Point(20, 44);
+            this.pictureBoxLeft.Location = new System.Drawing.Point(20, 40);
             this.pictureBoxLeft.Name = "pictureBoxLeft";
             this.pictureBoxLeft.Size = new System.Drawing.Size(400, 420);
             this.pictureBoxLeft.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
             this.pictureBoxLeft.TabIndex = 1;
             this.pictureBoxLeft.TabStop = false;
+            this.pictureBoxLeft.Visible = true;
             this.pictureBoxLeft.Click += new System.EventHandler(this.PictureBoxLeft_Click);
             // 
             // pictureBoxRight
             // 
             this.pictureBoxRight.BackColor = System.Drawing.Color.Transparent;
-            this.pictureBoxRight.Location = new System.Drawing.Point(580, 44);
+            this.pictureBoxRight.Location = new System.Drawing.Point(580, 40);
             this.pictureBoxRight.Name = "pictureBoxRight";
             this.pictureBoxRight.Size = new System.Drawing.Size(400, 420);
             this.pictureBoxRight.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
             this.pictureBoxRight.TabIndex = 2;
             this.pictureBoxRight.TabStop = false;
+            this.pictureBoxRight.Visible = true;
             this.pictureBoxRight.Click += new System.EventHandler(this.PictureBoxRight_Click);
             // 
             // remainingLabel
             // 
             this.remainingLabel.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.remainingLabel.ForeColor = System.Drawing.Color.White;
-            this.remainingLabel.Location = new System.Drawing.Point(20, 760);
+            this.remainingLabel.Location = new System.Drawing.Point(20, 650);
             this.remainingLabel.Name = "remainingLabel";
             this.remainingLabel.Size = new System.Drawing.Size(960, 40);
             this.remainingLabel.TabIndex = 3;
             this.remainingLabel.Text = "Photos remaining: 0";
             this.remainingLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.remainingLabel.Visible = false;
+            this.remainingLabel.Visible = true;
             // 
             // thumbnailPanel
             // 
             this.thumbnailPanel.AutoScroll = true;
             this.thumbnailPanel.BackColor = System.Drawing.Color.Transparent;
-            this.thumbnailPanel.Location = new System.Drawing.Point(20, 80);
+            this.thumbnailPanel.Location = new System.Drawing.Point(20, 480);
             this.thumbnailPanel.Name = "thumbnailPanel";
-            this.thumbnailPanel.Size = new System.Drawing.Size(960, 450);
+            this.thumbnailPanel.Size = new System.Drawing.Size(960, 100);
             this.thumbnailPanel.TabIndex = 5;
-            this.thumbnailPanel.Visible = false;
+            this.thumbnailPanel.Visible = true;
             // 
             // menuStrip
             // 
@@ -135,12 +138,13 @@
             this.menuStrip.Size = new System.Drawing.Size(1000, 28);
             this.menuStrip.TabIndex = 8;
             this.menuStrip.Text = "menuStrip";
+            this.menuStrip.Visible = true;
             // 
             // deletePromptLabel
             // 
             this.deletePromptLabel.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.deletePromptLabel.ForeColor = System.Drawing.Color.White;
-            this.deletePromptLabel.Location = new System.Drawing.Point(20, 550);
+            this.deletePromptLabel.Location = new System.Drawing.Point(20, 600);
             this.deletePromptLabel.Name = "deletePromptLabel";
             this.deletePromptLabel.Size = new System.Drawing.Size(960, 40);
             this.deletePromptLabel.TabIndex = 11;
@@ -170,6 +174,7 @@
             this.settingsGroupBox.Size = new System.Drawing.Size(560, 440);
             this.settingsGroupBox.TabIndex = 17;
             this.settingsGroupBox.TabStop = false;
+            this.settingsGroupBox.Visible = true;
             // 
             // skipAnimationsCheckBox
             // 
@@ -350,13 +355,13 @@
             this.saveAndQuitButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(26)))));
             this.saveAndQuitButton.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.saveAndQuitButton.ForeColor = System.Drawing.Color.White;
-            this.saveAndQuitButton.Location = new System.Drawing.Point(440, 474);
+            this.saveAndQuitButton.Location = new System.Drawing.Point(390, 700);
             this.saveAndQuitButton.Name = "saveAndQuitButton";
             this.saveAndQuitButton.Size = new System.Drawing.Size(220, 40);
-            this.saveAndQuitButton.TabIndex = 19;
+            this.saveAndQuitButton.TabIndex = 0;
             this.saveAndQuitButton.Text = "Save and Quit";
             this.saveAndQuitButton.UseVisualStyleBackColor = false;
-            this.saveAndQuitButton.Visible = false;
+            this.saveAndQuitButton.Visible = true;
             this.saveAndQuitButton.Click += new System.EventHandler(this.SaveAndQuitButton_Click);
             // 
             // copyrightLabel
@@ -391,27 +396,25 @@
             // 
             // MainForm
             // 
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(26)))), ((int)(((byte)(26)))), ((int)(((byte)(26)))));
-            this.ClientSize = new System.Drawing.Size(1000, 800);
-            this.Controls.Add(this.controlsPictureBox);
-            this.Controls.Add(this.batchProgressLabel);
-            this.Controls.Add(this.copyrightLabel);
+            this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(18)))), ((int)(((byte)(18)))), ((int)(((byte)(18)))));
+            this.ClientSize = new System.Drawing.Size(1000, 760);
             this.Controls.Add(this.saveAndQuitButton);
-            this.Controls.Add(this.logoPictureBox);
-            this.Controls.Add(this.settingsGroupBox);
-            this.Controls.Add(this.deletePromptLabel);
-            this.Controls.Add(this.thumbnailPanel);
             this.Controls.Add(this.remainingLabel);
+            this.Controls.Add(this.deletePromptLabel);
+            this.Controls.Add(this.settingsGroupBox);
+            this.Controls.Add(this.thumbnailPanel);
             this.Controls.Add(this.pictureBoxRight);
             this.Controls.Add(this.pictureBoxLeft);
             this.Controls.Add(this.selectFolderButton);
             this.Controls.Add(this.menuStrip);
-            this.Font = new System.Drawing.Font("Montserrat SemiBold", 14F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.ForeColor = System.Drawing.Color.White;
             this.MainMenuStrip = this.menuStrip;
             this.Name = "MainForm";
             this.Text = "Picksy";
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxLeft)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxRight)).EndInit();
             this.thumbnailPanel.ResumeLayout(false);
