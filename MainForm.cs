@@ -1715,6 +1715,11 @@ namespace Picksy
                         {
                             SaveStateToFile(false);
                         }
+                        if (saveStateExists)
+                        {
+                            SaveStateToFile(true);
+                            ResetUI();
+                        }
                         form.Close();
                     };
 
