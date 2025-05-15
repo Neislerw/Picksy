@@ -489,7 +489,7 @@ namespace Picksy
                 var validFiles = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
                 photoRotations = photoRotations?.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, int>();
 
-                bool isSessionCompleted = batches == null || batches.Count == 0 || currentBatch == null || currentBatch.Count == 0 || remainingPhotos == null || remainingPhotos.Count == 0 || losers == null || losers.Count == 0 || currentBatchIndex >= batches.Count;
+                bool isSessionCompleted = (batches == null || batches.Count == 0) && (currentBatch == null || currentBatch.Count == 0);
                 if (isSessionCompleted)
                 {
                     batches = new List<List<string>>();
@@ -506,6 +506,8 @@ namespace Picksy
                     currentPairIndex = 0;
                 }
 
+                totalBatchPhotos = (batches?.Sum(b => b.Count) ?? 0) + (currentBatch?.Count ?? 0);
+
                 var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
                 var searchOption = savedSettings.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
                 var allPhotos = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
@@ -521,6 +523,7 @@ namespace Picksy
                     var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, batchMethod, debugLogging: false);
                     var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
                     newBatches = newBatches.Where(b => b.Count >= savedSettings.BatchSizeMinimum).ToList();
+
                     if (newBatches.Any())
                     {
                         if (batches == null || batches.Count == 0)
@@ -541,19 +544,9 @@ namespace Picksy
                         totalBatchPhotos += newBatches.Sum(b => b.Count);
                         initialFileCount += newPhotos.Count;
                     }
-                    try
-                    {
-                        File.AppendAllText("picksy_debug.log", $"[{DateTime.Now}] LoadSession: Found {newPhotos.Count} new photos, grouped into {newBatches.Count} valid batches.\n");
-                    }
-                    catch
-                    {
-                        Console.WriteLine($"Debug: Found {newPhotos.Count} new photos, grouped into {newBatches.Count} valid batches.");
-                    }
                 }
 
-                totalBatchPhotos = (batches?.Sum(b => b.Count) ?? 0) + (currentBatch?.Count ?? 0);
-
-                if (batches != null && batches.Count > 0 && currentBatch != null && currentBatch.Count >= savedSettings.BatchSizeMinimum)
+                if (batches != null && batches.Count > 0 && currentBatch != null)
                 {
                     isLoadingSession = true;
                     try
@@ -1658,7 +1651,26 @@ namespace Picksy
                     form.Controls.Add(shareButton);
                     form.Controls.Add(closeButton);
 
+                    pictureBoxLeft.Image?.Dispose();
+                    pictureBoxRight.Image?.Dispose();
+                    pictureBoxLeft.Image = null;
+                    pictureBoxRight.Image = null;
+                    pictureBoxLeft.Visible = false;
+                    pictureBoxRight.Visible = false;
+                    saveAndQuitButton.Visible = false;
+                    remainingLabel.Visible = false;
+                    batchProgressLabel.Visible = false;
+                    if (seenProgressContainer != null)
+                        seenProgressContainer.Visible = false;
+                    if (reseenProgressContainer != null)
+                        reseenProgressContainer.Visible = false;
+                    leftFeedbackBar.Visible = false;
+                    rightFeedbackBar.Visible = false;
+                    controlsPictureBox.Visible = false;
+
                     form.ShowDialog(this);
+                    ResetUI();
+                    controlsPictureBox.Visible = false;  // Ensure controls stay hidden after ResetUI
                 }
             }
         }
