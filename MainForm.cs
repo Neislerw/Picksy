@@ -597,31 +597,79 @@ namespace Picksy
                     .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                     .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                     .ToList();
+
                 var processedPhotos = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
                 var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
+
+                try
+                {
+                    File.AppendAllText("picksy_debug.log", $"\n[{DateTime.Now}] LoadSession Debug:\n");
+                    File.AppendAllText("picksy_debug.log", $"Total photos in folder: {allPhotos.Count}\n");
+                    File.AppendAllText("picksy_debug.log", $"Processed photos count: {processedPhotos.Count}\n");
+                    File.AppendAllText("picksy_debug.log", $"New photos found: {newPhotos.Count}\n");
+                    if (newPhotos.Count > 0)
+                    {
+                        File.AppendAllText("picksy_debug.log", "New photos list:\n");
+                        foreach (var photo in newPhotos)
+                        {
+                            File.AppendAllText("picksy_debug.log", $"- {Path.GetFileName(photo)}\n");
+                        }
+                    }
+                }
+                catch
+                {
+                    Console.WriteLine($"Debug: Total photos in folder: {allPhotos.Count}");
+                    Console.WriteLine($"Debug: Processed photos count: {processedPhotos.Count}");
+                    Console.WriteLine($"Debug: New photos found: {newPhotos.Count}");
+                }
 
                 if (newPhotos.Count > 0)
                 {
                     var batchMethod = Enum.Parse<BatchSelectionMethod>(savedSettings.BatchSelectionMethod.Replace(" ", ""));
-                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, batchMethod, debugLogging: false);
+                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, batchMethod, debugLogging: true);
                     var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
                     newBatches = newBatches.Where(b => b.Count >= savedSettings.BatchSizeMinimum).ToList();
+
+                    try
+                    {
+                        File.AppendAllText("picksy_debug.log", $"\nBatch grouping results:\n");
+                        File.AppendAllText("picksy_debug.log", $"Initial batches created: {newBatches.Count}\n");
+                        File.AppendAllText("picksy_debug.log", $"Valid batches (after minimum size filter): {newBatches.Count}\n");
+                        if (newBatches.Count == 0)
+                        {
+                            File.AppendAllText("picksy_debug.log", "No valid batches created. Possible reasons:\n");
+                            File.AppendAllText("picksy_debug.log", $"- Minimum batch size: {savedSettings.BatchSizeMinimum}\n");
+                            File.AppendAllText("picksy_debug.log", $"- Maximum timing: {savedSettings.BatchTimingMaximum} seconds\n");
+                            File.AppendAllText("picksy_debug.log", $"- Batch selection method: {savedSettings.BatchSelectionMethod}\n");
+                            File.AppendAllText("picksy_debug.log", $"- Include subfolders: {savedSettings.IncludeSubfolders}\n");
+                        }
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"Debug: Initial batches created: {newBatches.Count}");
+                        Console.WriteLine($"Debug: Valid batches (after minimum size filter): {newBatches.Count}");
+                    }
+                    
                     if (newBatches.Any())
                     {
                         if (batches == null || batches.Count == 0)
                         {
                             batches = newBatches;
                             currentBatchIndex = 0;
-                            if (!isSessionCompleted)
-                            {
-                                currentBatch = new List<string>(batches[0]);
-                                remainingPhotos = new List<string>(currentBatch);
-                                currentPairIndex = 0;
-                            }
+                            currentBatch = new List<string>(batches[0]);
+                            remainingPhotos = new List<string>(currentBatch);
+                            currentPairIndex = 0;
                         }
                         else
                         {
                             batches.AddRange(newBatches);
+                            if (currentBatch == null || currentBatch.Count < savedSettings.BatchSizeMinimum)
+                            {
+                                currentBatchIndex = batches.Count - newBatches.Count;
+                                currentBatch = new List<string>(batches[currentBatchIndex]);
+                                remainingPhotos = new List<string>(currentBatch);
+                                currentPairIndex = 0;
+                            }
                         }
                         totalBatchPhotos += newBatches.Sum(b => b.Count);
                         initialFileCount += newPhotos.Count;
@@ -1513,6 +1561,9 @@ namespace Picksy
             }
             else
             {
+                // Save state before showing completion screen
+                SaveStateToFile(false);
+
                 double deleteFolderSizeMB = 0;
                 if (currentFolderPath != null)
                 {

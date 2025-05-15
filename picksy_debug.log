@@ -9,3 +9,84 @@
 [5/14/2025 8:52:31 PM] LoadSession: Found 20 new photos, grouped into 2 valid batches.
 [5/14/2025 8:55:54 PM] LoadSession: Found 31 new photos, grouped into 7 valid batches.
 [5/15/2025 2:55:42 PM] LoadSession: Found 8 new photos, grouped into 2 valid batches.
+[5/15/2025 3:42:55 PM] LoadSession: Found 11 new photos, grouped into 2 valid batches.
+
+[5/15/2025 3:48:44 PM] LoadSession Debug:
+Total photos in folder: 11
+Processed photos count: 0
+New photos found: 11
+New photos list:
+- 20200206_162100.jpg
+- 20200206_162335.jpg
+- 20200301_074154.jpg
+- 20250122_171155.jpg
+- 20250122_171156.jpg
+- 20250122_171159.jpg
+- 20250122_171222_001.jpg
+- 20250122_171223_007.jpg
+- 20250122_171229_001.jpg
+- 20250122_171237_001.jpg
+- 20250122_171237_002.jpg
+
+Batch grouping results:
+Initial batches created: 2
+Valid batches (after minimum size filter): 2
+[5/15/2025 3:48:44 PM] LoadSession: Found 11 new photos, grouped into 2 valid batches.
+
+[5/15/2025 3:51:13 PM] LoadSession Debug:
+Total photos in folder: 10
+Processed photos count: 0
+New photos found: 10
+New photos list:
+- 20200206_162100.jpg
+- 20200301_074154.jpg
+- 20250122_171155.jpg
+- 20250122_171156.jpg
+- 20250122_171159.jpg
+- 20250122_171222_001.jpg
+- 20250122_171223_007.jpg
+- 20250122_171229_001.jpg
+- 20250122_171237_001.jpg
+- 20250122_171237_002.jpg
+
+Batch grouping results:
+Initial batches created: 1
+Valid batches (after minimum size filter): 1
+[5/15/2025 3:51:13 PM] LoadSession: Found 10 new photos, grouped into 1 valid batches.
+
+[5/15/2025 3:51:30 PM] LoadSession Debug:
+Total photos in folder: 10
+Processed photos count: 0
+New photos found: 10
+New photos list:
+- 20200206_162100.jpg
+- 20200301_074154.jpg
+- 20250122_171155.jpg
+- 20250122_171156.jpg
+- 20250122_171159.jpg
+- 20250122_171222_001.jpg
+- 20250122_171223_007.jpg
+- 20250122_171229_001.jpg
+- 20250122_171237_001.jpg
+- 20250122_171237_002.jpg
+
+Batch grouping results:
+Initial batches created: 1
+Valid batches (after minimum size filter): 1
+[5/15/2025 3:51:30 PM] LoadSession: Found 10 new photos, grouped into 1 valid batches.
+
+[5/15/2025 3:51:57 PM] LoadSession Debug:
+Total photos in folder: 5
+Processed photos count: 0
+New photos found: 5
+New photos list:
+- 20200206_162100.jpg
+- 20200301_074154.jpg
+- 20250122_171156.jpg
+- 20250122_171229_001.jpg
+- 20250122_171237_001.jpg
+
+Batch grouping results:
+Initial batches created: 1
+Valid batches (after minimum size filter): 1
+[5/15/2025 3:51:57 PM] LoadSession: Found 5 new photos, grouped into 1 valid batches.
