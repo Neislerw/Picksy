@@ -22,8 +22,9 @@ namespace Picksy
         private readonly bool _includeSubfolders;
         private readonly BatchSelectionMethod _batchSelectionMethod;
         private readonly bool _debugLogging;
+        private readonly HashSet<string>? _keptPhotos;
 
-        public PhotoGrouper(int batchSizeMinimum, int batchTimingMaximum, bool includeSubfolders, BatchSelectionMethod batchSelectionMethod, bool debugLogging = false)
+        public PhotoGrouper(int batchSizeMinimum, int batchTimingMaximum, bool includeSubfolders, BatchSelectionMethod batchSelectionMethod, bool debugLogging = false, HashSet<string>? keptPhotos = null)
         {
             if (batchSizeMinimum < 1) throw new ArgumentException("Batch size minimum must be at least 1.", nameof(batchSizeMinimum));
             if (batchTimingMaximum < 1) throw new ArgumentException("Batch timing maximum must be at least 1 second.", nameof(batchTimingMaximum));
@@ -32,6 +33,7 @@ namespace Picksy
             _includeSubfolders = includeSubfolders;
             _batchSelectionMethod = batchSelectionMethod;
             _debugLogging = debugLogging;
+            _keptPhotos = keptPhotos;
         }
 
         public List<List<string>> GroupPhotos(string folderPath, List<string>? photos = null)
@@ -48,6 +50,12 @@ namespace Picksy
                         .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
                         .Where(f => !Path.GetFileName(f).StartsWith("._"))
                         .ToList();
+
+                // Filter out kept photos if they exist
+                if (_keptPhotos != null && _keptPhotos.Count > 0)
+                {
+                    photoFiles = photoFiles.Where(f => !_keptPhotos.Contains(f)).ToList();
+                }
 
                 var photoTimestamps = new List<(string Path, DateTime Timestamp, bool HasValidDateTaken, string MetadataSource, DateTime CreationTime, DateTime ModifiedTime)>();
                 var logEntries = new List<string> { $"Processing {photoFiles.Count} photos at {DateTime.Now}" };

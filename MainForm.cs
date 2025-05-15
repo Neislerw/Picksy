@@ -32,6 +32,7 @@ namespace Picksy
         private int initialBatchSize = 0;
         private HashSet<string> seenPhotos = new HashSet<string>();
         private HashSet<string> reseenPhotos = new HashSet<string>();
+        private HashSet<string> keptPhotos = new HashSet<string>();
 
         private Panel? seenProgressContainer;
         private Panel? seenProgressBar;
@@ -324,9 +325,10 @@ namespace Picksy
                         initialFileCount = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
                             .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
                             .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
+                            .Where(f => !keptPhotos.Contains(f))
                             .Count();
                         var batchMethod = Enum.Parse<BatchSelectionMethod>(batchSelectionMethod.Replace(" ", ""));
-                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchMethod, debugLogging: false);
+                        var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchMethod, debugLogging: false, keptPhotos: keptPhotos);
                         batches = grouper.GroupPhotos(dialog.SelectedPath);
                         currentBatchIndex = 0;
                         totalBatchPhotos = 0;
@@ -486,65 +488,36 @@ namespace Picksy
                     currentBatchIndex = 0;
                 }
 
+                keptPhotos = state.TryGetValue("KeptPhotos", out var keptPhotosElement)
+                    ? new HashSet<string>(keptPhotosElement.Deserialize<List<string>>() ?? new List<string>())
+                    : new HashSet<string>();
+
                 var validFiles = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
                 photoRotations = photoRotations?.Where(kvp => validFiles.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, int>();
+                keptPhotos = keptPhotos.Where(f => File.Exists(f) && !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar)).ToHashSet();
 
-                bool isSessionCompleted = (batches == null || batches.Count == 0) && (currentBatch == null || currentBatch.Count == 0);
-                if (isSessionCompleted)
+                // Filter out kept photos from all batches and current batch
+                if (batches != null)
                 {
-                    batches = new List<List<string>>();
-                    currentBatch = new List<string>();
-                    remainingPhotos = new List<string>();
-                    losers = new List<string>();
-                    currentBatchIndex = 0;
-                    currentPairIndex = 0;
+                    batches = batches.Select(batch => batch.Where(f => !keptPhotos.Contains(f)).ToList())
+                                   .Where(batch => batch.Count >= savedSettings.BatchSizeMinimum)
+                                   .ToList();
                 }
-                else if (currentBatch != null && currentBatch.Count < savedSettings.BatchSizeMinimum && batches != null && batches.Count > 0)
+                if (currentBatch != null)
                 {
-                    currentBatch = new List<string>(batches[0]);
-                    remainingPhotos = new List<string>(currentBatch);
-                    currentPairIndex = 0;
+                    currentBatch = currentBatch.Where(f => !keptPhotos.Contains(f)).ToList();
+                }
+                if (remainingPhotos != null)
+                {
+                    remainingPhotos = remainingPhotos.Where(f => !keptPhotos.Contains(f)).ToList();
+                }
+                if (losers != null)
+                {
+                    losers = losers.Where(f => !keptPhotos.Contains(f)).ToList();
                 }
 
+                // Update total batch photos count
                 totalBatchPhotos = (batches?.Sum(b => b.Count) ?? 0) + (currentBatch?.Count ?? 0);
-
-                var imageExtensions = new[] { ".jpg", ".jpeg", ".png" };
-                var searchOption = savedSettings.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-                var allPhotos = Directory.GetFiles(currentFolderPath, "*.*", searchOption)
-                    .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
-                    .Where(f => !f.Contains(Path.DirectorySeparatorChar + "_delete" + Path.DirectorySeparatorChar))
-                    .ToList();
-                var processedPhotos = new HashSet<string>((remainingPhotos ?? new List<string>()).Concat(losers ?? new List<string>()).Concat(batches?.SelectMany(b => b) ?? new List<string>()));
-                var newPhotos = allPhotos.Where(f => !processedPhotos.Contains(f)).ToList();
-
-                if (newPhotos.Count > 0)
-                {
-                    var batchMethod = Enum.Parse<BatchSelectionMethod>(savedSettings.BatchSelectionMethod.Replace(" ", ""));
-                    var grouper = new PhotoGrouper(savedSettings.BatchSizeMinimum, savedSettings.BatchTimingMaximum, savedSettings.IncludeSubfolders, batchMethod, debugLogging: false);
-                    var newBatches = grouper.GroupPhotos(currentFolderPath, newPhotos);
-                    newBatches = newBatches.Where(b => b.Count >= savedSettings.BatchSizeMinimum).ToList();
-
-                    if (newBatches.Any())
-                    {
-                        if (batches == null || batches.Count == 0)
-                        {
-                            batches = newBatches;
-                            currentBatchIndex = 0;
-                            if (!isSessionCompleted)
-                            {
-                                currentBatch = new List<string>(batches[0]);
-                                remainingPhotos = new List<string>(currentBatch);
-                                currentPairIndex = 0;
-                            }
-                        }
-                        else
-                        {
-                            batches.AddRange(newBatches);
-                        }
-                        totalBatchPhotos += newBatches.Sum(b => b.Count);
-                        initialFileCount += newPhotos.Count;
-                    }
-                }
 
                 if (batches != null && batches.Count > 0 && currentBatch != null)
                 {
@@ -985,7 +958,7 @@ namespace Picksy
         private void SaveAndQuitButton_Click(object sender, EventArgs e)
         {
             SaveStateToFile(true);
-            Application.Exit();
+            ResetUI();
         }
 
         private void SaveStateToFile(bool showConfirmation)
@@ -1030,7 +1003,8 @@ namespace Picksy
                     BatchSizeMinimum = (int)batchSizeNumericUpDown.Value,
                     BatchTimingMaximum = (int)batchTimingNumericUpDown.Value,
                     IncludeSubfolders = includeSubfoldersCheckBox.Checked,
-                    BatchSelectionMethod = batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "Auto"
+                    BatchSelectionMethod = batchSelectionMethodComboBox.SelectedItem?.ToString() ?? "Auto",
+                    KeptPhotos = keptPhotos.Where(validFilesFilter).ToList()
                 };
                 string stateFilePath = Path.Combine(currentFolderPath, "picksy_state.json");
                 File.WriteAllText(stateFilePath, JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
@@ -1199,12 +1173,16 @@ namespace Picksy
             }
 
             bool allSeen = seenPhotos.Count == initialBatchSize;
-            seenPhotos.Add(remainingPhotos[currentPairIndex]);
-            seenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
+            string photo1 = remainingPhotos[currentPairIndex];
+            string photo2 = remainingPhotos[currentPairIndex + 1];
+            keptPhotos.Add(photo1);
+            keptPhotos.Add(photo2);
+            seenPhotos.Add(photo1);
+            seenPhotos.Add(photo2);
             if (allSeen)
             {
-                reseenPhotos.Add(remainingPhotos[currentPairIndex]);
-                reseenPhotos.Add(remainingPhotos[currentPairIndex + 1]);
+                reseenPhotos.Add(photo1);
+                reseenPhotos.Add(photo2);
             }
             history.Push((null, true));
             currentPairIndex += 2;
