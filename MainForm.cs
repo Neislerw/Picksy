@@ -848,8 +848,8 @@ namespace Picksy
             int availableWidth = (ClientSize.Width - 40) / 2;
 
             // Fixed size for controlsPictureBox
-            int controlsWidth = 600;
-            int controlsHeight = 141; // Maintain ~4.26:1 aspect ratio (600x141)
+            int controlsWidth = 800;
+            int controlsHeight = 131; // Maintain ~6.6:1 aspect ratio
 
             // Calculate max photo height to fit all elements without overlap
             int totalFixedHeight = topBuffer + 10 /* feedback bar */ + 5 /* gap */ + controlsHeight + 5 /* gap */ + 
@@ -871,7 +871,7 @@ namespace Picksy
             rightFeedbackBar.Location = new Point(ClientSize.Width - availableWidth - 20, pictureBoxRight.Bottom);
 
             controlsPictureBox.Size = new Size(controlsWidth, controlsHeight);
-            controlsPictureBox.Location = new Point((ClientSize.Width - controlsWidth) / 2, pictureBoxLeft.Bottom + barHeight + 5);
+            controlsPictureBox.Location = new Point((ClientSize.Width - controlsWidth) / 2, pictureBoxLeft.Bottom + barHeight);
 
             int progressBarX = (ClientSize.Width - 560) / 2;
             int progressBarY = controlsPictureBox.Bottom + 5;
