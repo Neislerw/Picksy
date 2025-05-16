@@ -1048,18 +1048,20 @@ namespace Picksy
 
             // Move progress bar and remaining label down by 20 pixels
             int progressBarX = (ClientSize.Width - 560) / 2;
-            int progressBarY = controlsPictureBox.Bottom + 25; // Increased from 5 to 25
+            int progressBarY = controlsPictureBox.Bottom + 35; // Increased to make room for label
             if (seenProgressContainer != null)
             {
                 seenProgressContainer.Size = new Size(560, 10);
                 seenProgressContainer.Location = new Point(progressBarX, progressBarY);
+                seenProgressContainer.BringToFront(); // Ensure it's on top when visible
             }
             if (reseenProgressContainer != null)
             {
                 reseenProgressContainer.Size = new Size(560, 10);
                 reseenProgressContainer.Location = new Point(progressBarX, progressBarY);
             }
-            batchProgressLabel.Location = new Point(progressBarX, progressBarY - 15);
+            batchProgressLabel.Size = new Size(560, 40); // Increased height to prevent text cutoff
+            batchProgressLabel.Location = new Point(progressBarX, progressBarY - 30); // Moved up to make room for bar
 
             remainingLabel.Location = new Point((ClientSize.Width - remainingLabel.Width) / 2, progressBarY + 15);
 
