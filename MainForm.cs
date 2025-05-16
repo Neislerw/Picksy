@@ -1224,6 +1224,42 @@ namespace Picksy
                 }
                 else if (keyData == Keys.Down)
                 {
+                    Console.WriteLine($"ProcessCmdKey: Down key triggered at {DateTime.Now.Ticks / 10000}ms");
+                    if (remainingPhotos == null || currentPairIndex + 1 >= remainingPhotos.Count || isAnimating)
+                    {
+                        Console.WriteLine($"KeepBothPhotos: Blocked - remainingPhotos={(remainingPhotos == null ? "null" : remainingPhotos.Count.ToString())}, isAnimating={isAnimating}");
+                        return true;
+                    }
+
+                    string photo1 = remainingPhotos[currentPairIndex];
+                    string photo2 = remainingPhotos[currentPairIndex + 1];
+                    losers?.Add(photo1);
+                    losers?.Add(photo2);
+                    remainingPhotos.RemoveAt(currentPairIndex + 1);
+                    remainingPhotos.RemoveAt(currentPairIndex);
+                    history.Push((null, false));
+                    history.Push((null, false));
+
+                    if (!skipAnimationsCheckBox.Checked)
+                    {
+                        isAnimating = true;
+                        leftFeedbackBar.BackColor = Color.Red;
+                        leftFeedbackBar.Visible = true;
+                        rightFeedbackBar.BackColor = Color.Red;
+                        rightFeedbackBar.Visible = true;
+                        nonSelectedBox = null;
+
+                        Console.WriteLine($"DiscardBothPhotos: Showing red bars at {DateTime.Now.Ticks / 10000}ms");
+                        feedbackTimer.Start();
+                    }
+                    else
+                    {
+                        UpdateTournamentUI();
+                    }
+                    return true;
+                }
+                else if (keyData == Keys.Z)
+                {
                     UndoLastAction();
                     return true;
                 }
@@ -1373,6 +1409,16 @@ namespace Picksy
             else
             {
                 UpdateTournamentUI();
+            }
+
+            // Check if these were the last two photos
+            if (remainingPhotos.Count <= currentPairIndex)
+            {
+                if (!skipConfirmationCheckBox.Checked)
+                {
+                    MessageBox.Show("Tournament ended. Keeping all remaining photos.", "Picksy");
+                }
+                ShowResults();
             }
         }
 
