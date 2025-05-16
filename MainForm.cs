@@ -34,6 +34,11 @@ namespace Picksy
         private int initialBatchSize = 0;
         private HashSet<string> seenPhotos = new HashSet<string>();
         private HashSet<string> reseenPhotos = new HashSet<string>();
+        private string lastOpenedFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+        private float zoomLevel = 1.0f;
+        private const float ZOOM_FACTOR = 0.1f;
+        private const float MIN_ZOOM = 0.5f;
+        private const float MAX_ZOOM = 3.0f;
 
         private Panel? seenProgressContainer;
         private Panel? seenProgressBar;
@@ -66,6 +71,11 @@ namespace Picksy
 
             // Apply font to form and controls
             ApplyMontserratFont();
+
+            // Enable mouse wheel events
+            this.AutoScroll = true;
+            pictureBoxLeft.MouseWheel += PictureBox_MouseWheel;
+            pictureBoxRight.MouseWheel += PictureBox_MouseWheel;
 
             batchSelectionMethodComboBox.Items.AddRange(new[] { "Auto", "By Name", "By Date Created", "By Date Modified", "By Date Taken" });
             batchSelectionMethodComboBox.SelectedIndex = 0; // Default to "Auto"
@@ -375,19 +385,29 @@ namespace Picksy
 
             Console.WriteLine($"SelectFolderButton_Click: Using batch selection method: {batchSelectionMethod}");
 
-            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            using (OpenFileDialog dialog = new OpenFileDialog())
             {
-                dialog.Description = "Select a folder containing photos";
-                dialog.ShowNewFolderButton = false;
+                dialog.Title = "Select a folder containing photos";
+                dialog.Filter = "Image Files|*.jpg;*.jpeg;*.png";
+                dialog.Multiselect = false;
+                dialog.CheckFileExists = false;
+                dialog.CheckPathExists = true;
+                dialog.FileName = "Select Folder";
+                dialog.ValidateNames = false;
+                dialog.ShowReadOnly = false;
+                dialog.ReadOnlyChecked = true;
+                dialog.InitialDirectory = lastOpenedFolder;
+
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     try
                     {
-                        currentFolderPath = dialog.SelectedPath;
+                        currentFolderPath = Path.GetDirectoryName(dialog.FileName);
                         if (string.IsNullOrEmpty(currentFolderPath) || !Directory.Exists(currentFolderPath))
                         {
                             throw new InvalidOperationException($"Invalid or inaccessible folder selected. Path: {currentFolderPath}");
                         }
+                        lastOpenedFolder = currentFolderPath;
 
                         string stateFilePath = Path.Combine(currentFolderPath, "picksy_state.json");
                         if (File.Exists(stateFilePath))
@@ -412,7 +432,7 @@ namespace Picksy
                             .Count();
                         var batchMethod = Enum.Parse<BatchSelectionMethod>(batchSelectionMethod.Replace(" ", ""));
                         var grouper = new PhotoGrouper(batchSizeMinimum, batchTimingMaximum, includeSubfolders, batchMethod, debugLogging: false);
-                        batches = grouper.GroupPhotos(dialog.SelectedPath);
+                        batches = grouper.GroupPhotos(currentFolderPath);
                         currentBatchIndex = 0;
                         totalBatchPhotos = 0;
                         deletedPhotosCount = 0;
@@ -430,11 +450,11 @@ namespace Picksy
                         MessageBox.Show($"Error scanning folder: {ex.Message}", "Picksy Error");
                         try
                         {
-                            File.WriteAllText("picksy_error.log", $"Error details: {ex}\nAttempted path: {dialog.SelectedPath}\nTimestamp: {DateTime.Now}");
+                            File.WriteAllText("picksy_error.log", $"Error details: {ex}\nAttempted path: {dialog.FileName}\nTimestamp: {DateTime.Now}");
                         }
                         catch
                         {
-                            Console.WriteLine($"Error details: {ex}\nAttempted path: {dialog.SelectedPath}");
+                            Console.WriteLine($"Error details: {ex}\nAttempted path: {dialog.FileName}");
                         }
                     }
                 }
@@ -874,9 +894,9 @@ namespace Picksy
                 if (showFullResolution)
                 {
                     if (leftImage != null)
-                        pictureBoxLeft.Image = RotateImage(leftImage, leftTotalRotation);
+                        pictureBoxLeft.Image = CreateZoomedImage(leftImage, leftTotalRotation, zoomLevel);
                     if (rightImage != null)
-                        pictureBoxRight.Image = RotateImage(rightImage, rightTotalRotation);
+                        pictureBoxRight.Image = CreateZoomedImage(rightImage, rightTotalRotation, zoomLevel);
                 }
                 else
                 {
@@ -1009,6 +1029,31 @@ namespace Picksy
             }
         }
 
+        private Image CreateZoomedImage(Image image, int rotation, float zoom)
+        {
+            if (zoom == 1.0f)
+                return RotateImage(image, rotation);
+
+            int newWidth = (int)(image.Width * zoom);
+            int newHeight = (int)(image.Height * zoom);
+            var zoomed = new Bitmap(newWidth, newHeight);
+            try
+            {
+                using (var g = Graphics.FromImage(zoomed))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.Clear(Color.Transparent);
+                    g.DrawImage(image, 0, 0, newWidth, newHeight);
+                }
+                return RotateImage(zoomed, rotation);
+            }
+            catch
+            {
+                zoomed.Dispose();
+                throw;
+            }
+        }
+
         private void UpdatePictureBoxSizes()
         {
             int availableHeight = ClientSize.Height - menuStrip.Height - remainingLabel.Height - batchProgressLabel.Height - saveAndQuitButton.Height - copyrightLabel.Height - controlsPictureBox.Height - (seenProgressContainer?.Height ?? 0) - (reseenProgressContainer?.Height ?? 0) - 100;
@@ -1107,7 +1152,7 @@ namespace Picksy
         private void SaveAndQuitButton_Click(object sender, EventArgs e)
         {
             SaveStateToFile(true);
-            Application.Exit();
+            ResetUI();
         }
 
         private void SaveStateToFile(bool showConfirmation)
@@ -1225,6 +1270,8 @@ namespace Picksy
                 else if (keyData == Keys.W)
                 {
                     showFullResolution = !showFullResolution;
+                    if (!showFullResolution)
+                        zoomLevel = 1.0f;
                     UpdateTournamentUI();
                     return true;
                 }
@@ -1310,6 +1357,13 @@ namespace Picksy
             if (remainingPhotos == null || currentPairIndex + 1 >= remainingPhotos.Count || isAnimating)
             {
                 Console.WriteLine($"KeepBothPhotos: Blocked - remainingPhotos={(remainingPhotos == null ? "null" : remainingPhotos.Count.ToString())}, isAnimating={isAnimating}");
+                return;
+            }
+
+            // If there are only 2 photos left, treat this as "keep all remaining"
+            if (remainingPhotos.Count == 2)
+            {
+                EndTournament();
                 return;
             }
 
@@ -1784,6 +1838,27 @@ namespace Picksy
             }
             thumbnailPanel.Controls.Clear();
             deletePromptLabel.Visible = false;
+        }
+
+        private void PictureBox_MouseWheel(object? sender, MouseEventArgs e)
+        {
+            if (showFullResolution && pictureBoxLeft.Visible)
+            {
+                float delta = e.Delta > 0 ? ZOOM_FACTOR : -ZOOM_FACTOR;
+                zoomLevel = Math.Max(MIN_ZOOM, Math.Min(MAX_ZOOM, zoomLevel + delta));
+                UpdateTournamentUI();
+            }
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            if (showFullResolution && pictureBoxLeft.Visible)
+            {
+                float delta = e.Delta > 0 ? ZOOM_FACTOR : -ZOOM_FACTOR;
+                zoomLevel = Math.Max(MIN_ZOOM, Math.Min(MAX_ZOOM, zoomLevel + delta));
+                UpdateTournamentUI();
+            }
         }
     }
 }

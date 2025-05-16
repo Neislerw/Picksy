@@ -199,3 +199,64 @@ Batch grouping results:
 Initial batches created: 4
 Valid batches (after minimum size filter): 4
 [5/15/2025 6:28:59 PM] LoadSession: Found 19 new photos, grouped into 4 valid batches.
+
+[5/15/2025 8:01:50 PM] LoadSession Debug:
+Total photos in folder: 20
+Processed photos count: 0
+New photos found: 20
+New photos list:
+- 2.jpg
+- 20241218_172511.jpg
+- 20241221_115538.jpg
+- 20241221_115550.jpg
+- 20250122_084727.jpg
+- 523.jpg
+- aflkja.jpg
+- d;lkf.jpg
+- dfakljdhf.jpg
+- dfl;kjasd;lkf.jpg
+- dkjfs.jpg
+- dklfjhs.jpg
+- fdsajflkds.jpg
+- fgadsfg.jpg
+- fgsfgsh.jpg
+- fkasdj;f.jpg
+- hgffg.jpg
+- rhgfg.jpg
+- sdkjfh.jpg
+- sfdjs.jpg
+
+Batch grouping results:
+Initial batches created: 5
+Valid batches (after minimum size filter): 5
+[5/15/2025 8:01:50 PM] LoadSession: Found 20 new photos, grouped into 5 valid batches.
+
+[5/15/2025 8:03:40 PM] LoadSession Debug:
+Total photos in folder: 19
+Processed photos count: 0
+New photos found: 19
+New photos list:
+- 2.jpg
+- 20241218_172511.jpg
+- 20241221_115538.jpg
+- 20241221_115550.jpg
+- 20250122_084727.jpg
+- 523.jpg
+- aflkja.jpg
+- d;lkf.jpg
+- dfakljdhf.jpg
+- dfl;kjasd;lkf.jpg
+- dkjfs.jpg
+- dklfjhs.jpg
+- fdsajflkds.jpg
+- fgsfgsh.jpg
+- fkasdj;f.jpg
+- hgffg.jpg
+- rhgfg.jpg
+- sdkjfh.jpg
+- sfdjs.jpg
+
+Batch grouping results:
+Initial batches created: 4
+Valid batches (after minimum size filter): 4
+[5/15/2025 8:03:40 PM] LoadSession: Found 19 new photos, grouped into 4 valid batches.
