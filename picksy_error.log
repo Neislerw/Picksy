@@ -9,3 +9,12 @@ Timestamp: 5/10/2025 9:49:50 AM[5/15/2025 3:33:13 PM] Error loading embedded fon
    at Picksy.MainForm.LoadEmbeddedFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 152
 [5/15/2025 3:36:20 PM] Error applying embedded font: System.IndexOutOfRangeException: Index was outside the bounds of the array.
    at Picksy.MainForm.ApplyMontserratFont() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 182
+[5/21/2025 2:39:27 PM] Error loading images: System.IO.FileNotFoundException: C:\Users\Will\Documents\Coding\Picksy Photos\Select\1.jpg
+   at System.Drawing.Image.FromFile(String filename, Boolean useEmbeddedColorManagement)
+   at Picksy.MainForm.UpdateTournamentUI() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 726
+[5/21/2025 2:39:27 PM] Error loading images: System.IO.FileNotFoundException: C:\Users\Will\Documents\Coding\Picksy Photos\Select\6.jpg
+   at System.Drawing.Image.FromFile(String filename, Boolean useEmbeddedColorManagement)
+   at Picksy.MainForm.UpdateTournamentUI() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 728
+[5/21/2025 2:39:27 PM] Error loading images: System.IO.FileNotFoundException: C:\Users\Will\Documents\Coding\Picksy Photos\Select\sdfg.jpg
+   at System.Drawing.Image.FromFile(String filename, Boolean useEmbeddedColorManagement)
+   at Picksy.MainForm.UpdateTournamentUI() in C:\Users\Will\Documents\Coding\Picksy\MainForm.cs:line 728
