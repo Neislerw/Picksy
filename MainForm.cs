@@ -36,6 +36,7 @@ namespace Picksy
         private HashSet<string> reseenPhotos = new HashSet<string>();
         private HashSet<string> keptPhotos = new HashSet<string>();
         private List<BatchHistory> batchHistory;
+        private List<int> batchIndexMapping; // Map batches indices to currentSaveState.Batches indices
 
         private Panel? seenProgressContainer;
         private Panel? seenProgressBar;
@@ -74,6 +75,7 @@ namespace Picksy
             InitializeComponent();
             history = new Stack<(string? Loser, bool KeptBoth)>();
             batchHistory = new List<BatchHistory>();
+            batchIndexMapping = new List<int>();
             photoRotations = new Dictionary<string, int>();
             fontCollection = new PrivateFontCollection();
 
@@ -415,6 +417,7 @@ namespace Picksy
                         var batchMethod = Enum.Parse<BatchSelectionMethod>(batchSelectionMethod.Replace(" ", ""));
                         var grouper = new PhotoGrouper((int)batchSizeNumericUpDown.Value, (int)batchTimingNumericUpDown.Value, includeSubfolders, batchMethod, debugLogging: false);
                         batches = grouper.GroupPhotos(currentFolderPath);
+                        batchIndexMapping = Enumerable.Range(0, batches?.Count ?? 0).ToList();
 
                         if (batches?.Count > 0)
                         {
@@ -498,7 +501,6 @@ namespace Picksy
                     return;
                 }
 
-                // Initialize keptPhotos and losers from save state
                 keptPhotos.Clear();
                 losers = new List<string>();
                 foreach (var batch in currentSaveState.Batches)
@@ -512,8 +514,8 @@ namespace Picksy
                     }
                 }
 
-                // Build batches from unprocessed photos only
                 batches = new List<List<string>>();
+                batchIndexMapping = new List<int>();
                 int batchIndex = 0;
                 foreach (var saveBatch in currentSaveState.Batches)
                 {
@@ -524,8 +526,7 @@ namespace Picksy
                     if (unprocessedPhotos.Count >= 2)
                     {
                         batches.Add(unprocessedPhotos);
-                        if (batches.Count == 1)
-                            currentBatchIndex = batchIndex; // Set to first valid batch
+                        batchIndexMapping.Add(batchIndex);
                     }
                     batchIndex++;
                 }
@@ -537,6 +538,7 @@ namespace Picksy
                     return;
                 }
 
+                currentBatchIndex = 0;
                 currentBatch = batches[0];
                 remainingPhotos = new List<string>(currentBatch);
                 currentPairIndex = 0;
@@ -557,13 +559,20 @@ namespace Picksy
 
         private void UpdateBatchStatus()
         {
-            if (currentSaveState == null || currentBatchIndex >= currentSaveState.Batches.Count)
+            if (currentSaveState == null || currentBatchIndex >= batchIndexMapping.Count)
             {
                 Console.WriteLine("UpdateBatchStatus: Skipped - currentSaveState is null or invalid batch index.");
                 return;
             }
 
-            var currentBatchInfo = currentSaveState.Batches[currentBatchIndex];
+            var saveBatchIndex = batchIndexMapping[currentBatchIndex];
+            if (saveBatchIndex >= currentSaveState.Batches.Count)
+            {
+                Console.WriteLine("UpdateBatchStatus: Skipped - invalid save batch index.");
+                return;
+            }
+
+            var currentBatchInfo = currentSaveState.Batches[saveBatchIndex];
             
             foreach (var photo in currentBatchInfo.Photos)
             {
@@ -584,10 +593,8 @@ namespace Picksy
                 }
                 else
                 {
-                    // Ensure processed photos retain their status
                     if (photo.Status == 1)
                         continue;
-                    // Mark as unprocessed if not tracked
                     photo.Status = 0;
                     photo.Fate = 1;
                 }
@@ -737,7 +744,6 @@ namespace Picksy
                 {
                     MessageBox.Show($"Tournament ended. Winner: {Path.GetFileName(remainingPhotos[0])}", "Picksy");
                 }
-                // Mark the last photo as kept
                 keptPhotos.Add(remainingPhotos[0]);
                 UpdatePhotoStatus(remainingPhotos[0], 1, 1);
                 UpdateBatchStatus();
@@ -1095,152 +1101,151 @@ namespace Picksy
         }
 
         private void UndoLastAction()
-{
-    if (history.Count == 0 && batchHistory.Count == 0)
-    {
-        MessageBox.Show("No actions to undo.", "Picksy");
-        return;
-    }
-
-    // Handle undo within current batch
-    if (history.Count > 0 && remainingPhotos != null)
-    {
-        var lastAction = history.Pop();
-        if (lastAction.KeptBoth)
         {
-            if (currentPairIndex >= 2)
+            if (history.Count == 0 && batchHistory.Count == 0)
             {
-                currentPairIndex -= 2;
+                MessageBox.Show("No actions to undo.", "Picksy");
+                return;
             }
-            else
-            {
-                currentPairIndex = 0;
-            }
-            if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count >= 2)
-            {
-                reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
-                reseenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
-                if (reseenProgressContainer != null)
-                    reseenProgressContainer.Visible = false;
-            }
-            seenPhotos.Remove(remainingPhotos[currentPairIndex]);
-            seenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
-        }
-        else if (lastAction.Loser != null)
-        {
-            losers?.Remove(lastAction.Loser);
-            remainingPhotos.Insert(currentPairIndex + 1, lastAction.Loser);
-            if (seenPhotos.Contains(remainingPhotos[currentPairIndex]))
-            {
-                seenPhotos.Remove(remainingPhotos[currentPairIndex]);
-            }
-            if (seenPhotos.Contains(lastAction.Loser))
-            {
-                seenPhotos.Remove(lastAction.Loser);
-            }
-            if (reseenPhotos.Contains(remainingPhotos[currentPairIndex]))
-            {
-                if (reseenProgressContainer != null)
-                    reseenProgressContainer.Visible = false;
-                reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
-            }
-            if (reseenPhotos.Contains(lastAction.Loser))
-            {
-                if (reseenProgressContainer != null)
-                    reseenProgressContainer.Visible = false;
-                reseenPhotos.Remove(lastAction.Loser);
-            }
-            UpdatePhotoStatus(lastAction.Loser, 0, 1);
-        }
-        UpdateTournamentUI();
-        return;
-    }
 
-    // Handle undo across batches
-    if (batchHistory.Count > 0)
-    {
-        var lastBatch = batchHistory[batchHistory.Count - 1];
-        batchHistory.RemoveAt(batchHistory.Count - 1);
-
-        // Restore batch state
-        currentBatchIndex = lastBatch.BatchIndex;
-        currentBatch = new List<string>(batches![currentBatchIndex]);
-        remainingPhotos = new List<string>(lastBatch.RemainingPhotos);
-        losers = new List<string>(lastBatch.Losers);
-        currentPairIndex = lastBatch.CurrentPairIndex;
-        seenPhotos = new HashSet<string>(lastBatch.SeenPhotos);
-        reseenPhotos = new HashSet<string>(lastBatch.ReseenPhotos);
-        history = new Stack<(string? Loser, bool KeptBoth)>(lastBatch.History);
-        initialBatchSize = lastBatch.InitialBatchSize;
-
-        // Reset batch status and photo statuses in save state
-        if (currentSaveState != null && currentBatchIndex < currentSaveState.Batches.Count)
-        {
-            var batchInfo = currentSaveState.Batches[currentBatchIndex];
-            batchInfo.BatchStatus = 0;
-            foreach (var photo in batchInfo.Photos)
+            if (history.Count > 0 && remainingPhotos != null)
             {
-                photo.Status = 0;
-                photo.Fate = 1;
-            }
-            SaveSaveState();
-        }
-
-        // Undo the last action in the restored batch
-        if (history.Count > 0)
-        {
-            var lastAction = history.Pop();
-            if (lastAction.KeptBoth)
-            {
-                if (currentPairIndex >= 2)
+                var lastAction = history.Pop();
+                if (lastAction.KeptBoth)
                 {
-                    currentPairIndex -= 2;
-                }
-                else
-                {
-                    currentPairIndex = 0;
-                }
-                if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count >= 2)
-                {
-                    reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
-                    reseenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
-                    if (reseenProgressContainer != null)
-                        reseenProgressContainer.Visible = false;
-                }
-                seenPhotos.Remove(remainingPhotos[currentPairIndex]);
-                seenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
-            }
-            else if (lastAction.Loser != null)
-            {
-                losers.Remove(lastAction.Loser);
-                remainingPhotos.Insert(currentPairIndex + 1, lastAction.Loser);
-                if (seenPhotos.Contains(remainingPhotos[currentPairIndex]))
-                {
+                    if (currentPairIndex >= 2)
+                    {
+                        currentPairIndex -= 2;
+                    }
+                    else
+                    {
+                        currentPairIndex = 0;
+                    }
+                    if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count >= 2)
+                    {
+                        reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                        reseenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
+                        if (reseenProgressContainer != null)
+                            reseenProgressContainer.Visible = false;
+                    }
                     seenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                    seenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
                 }
-                if (seenPhotos.Contains(lastAction.Loser))
+                else if (lastAction.Loser != null)
                 {
-                    seenPhotos.Remove(lastAction.Loser);
+                    losers?.Remove(lastAction.Loser);
+                    remainingPhotos.Insert(currentPairIndex + 1, lastAction.Loser);
+                    if (seenPhotos.Contains(remainingPhotos[currentPairIndex]))
+                    {
+                        seenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                    }
+                    if (seenPhotos.Contains(lastAction.Loser))
+                    {
+                        seenPhotos.Remove(lastAction.Loser);
+                    }
+                    if (reseenPhotos.Contains(remainingPhotos[currentPairIndex]))
+                    {
+                        if (reseenProgressContainer != null)
+                            reseenProgressContainer.Visible = false;
+                        reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                    }
+                    if (reseenPhotos.Contains(lastAction.Loser))
+                    {
+                        if (reseenProgressContainer != null)
+                            reseenProgressContainer.Visible = false;
+                        reseenPhotos.Remove(lastAction.Loser);
+                    }
+                    UpdatePhotoStatus(lastAction.Loser, 0, 1);
                 }
-                if (reseenPhotos.Contains(remainingPhotos[currentPairIndex]))
+                UpdateTournamentUI();
+                return;
+            }
+
+            if (batchHistory.Count > 0)
+            {
+                var lastBatch = batchHistory[batchHistory.Count - 1];
+                batchHistory.RemoveAt(batchHistory.Count - 1);
+
+                currentBatchIndex = lastBatch.BatchIndex;
+                currentBatch = new List<string>(batches![currentBatchIndex]);
+                remainingPhotos = new List<string>(lastBatch.RemainingPhotos);
+                losers = new List<string>(lastBatch.Losers);
+                currentPairIndex = lastBatch.CurrentPairIndex;
+                seenPhotos = new HashSet<string>(lastBatch.SeenPhotos);
+                reseenPhotos = new HashSet<string>(lastBatch.ReseenPhotos);
+                history = new Stack<(string? Loser, bool KeptBoth)>(lastBatch.History);
+                initialBatchSize = lastBatch.InitialBatchSize;
+
+                if (currentSaveState != null && batchIndexMapping.Count > currentBatchIndex)
                 {
-                    if (reseenProgressContainer != null)
-                        reseenProgressContainer.Visible = false;
-                    reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                    var saveBatchIndex = batchIndexMapping[currentBatchIndex];
+                    if (saveBatchIndex < currentSaveState.Batches.Count)
+                    {
+                        var batchInfo = currentSaveState.Batches[saveBatchIndex];
+                        batchInfo.BatchStatus = 0;
+                        foreach (var photo in batchInfo.Photos)
+                        {
+                            photo.Status = 0;
+                            photo.Fate = 1;
+                        }
+                        SaveSaveState();
+                    }
                 }
-                if (reseenPhotos.Contains(lastAction.Loser))
+
+                if (history.Count > 0)
                 {
-                    if (reseenProgressContainer != null)
-                        reseenProgressContainer.Visible = false;
-                    reseenPhotos.Remove(lastAction.Loser);
+                    var lastAction = history.Pop();
+                    if (lastAction.KeptBoth)
+                    {
+                        if (currentPairIndex >= 2)
+                        {
+                            currentPairIndex -= 2;
+                        }
+                        else
+                        {
+                            currentPairIndex = 0;
+                        }
+                        if (seenPhotos.Count >= initialBatchSize && remainingPhotos.Count >= 2)
+                        {
+                            reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                            reseenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
+                            if (reseenProgressContainer != null)
+                                reseenProgressContainer.Visible = false;
+                        }
+                        seenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                        seenPhotos.Remove(remainingPhotos[currentPairIndex + 1]);
+                    }
+                    else if (lastAction.Loser != null)
+                    {
+                        losers.Remove(lastAction.Loser);
+                        remainingPhotos.Insert(currentPairIndex + 1, lastAction.Loser);
+                        if (seenPhotos.Contains(remainingPhotos[currentPairIndex]))
+                        {
+                            seenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                        }
+                        if (seenPhotos.Contains(lastAction.Loser))
+                        {
+                            seenPhotos.Remove(lastAction.Loser);
+                        }
+                        if (reseenPhotos.Contains(remainingPhotos[currentPairIndex]))
+                        {
+                            if (reseenProgressContainer != null)
+                                reseenProgressContainer.Visible = false;
+                            reseenPhotos.Remove(remainingPhotos[currentPairIndex]);
+                        }
+                        if (reseenPhotos.Contains(lastAction.Loser))
+                        {
+                            if (reseenProgressContainer != null)
+                                reseenProgressContainer.Visible = false;
+                            reseenPhotos.Remove(lastAction.Loser);
+                        }
+                        UpdatePhotoStatus(lastAction.Loser, 0, 1);
+                    }
                 }
-                UpdatePhotoStatus(lastAction.Loser, 0, 1);
+
+                StartTournament(currentBatch);
             }
         }
-
-        StartTournament(currentBatch);
-    }
-}
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -1536,15 +1541,19 @@ namespace Picksy
                 pictureBoxLeft.Image = null;
                 pictureBoxRight.Image = null;
 
-                if (currentSaveState != null && currentBatchIndex < currentSaveState.Batches.Count)
+                if (currentSaveState != null && batchIndexMapping.Count > currentBatchIndex)
                 {
-                    var currentBatchInfo = currentSaveState.Batches[currentBatchIndex];
-                    foreach (var photo in currentBatchInfo.Photos)
+                    var saveBatchIndex = batchIndexMapping[currentBatchIndex];
+                    if (saveBatchIndex < currentSaveState.Batches.Count)
                     {
-                        photo.Status = 1;
-                        photo.Fate = 0;
+                        var currentBatchInfo = currentSaveState.Batches[saveBatchIndex];
+                        foreach (var photo in currentBatchInfo.Photos)
+                        {
+                            photo.Status = 1;
+                            photo.Fate = 0;
+                        }
+                        SaveSaveState();
                     }
-                    SaveSaveState();
                 }
 
                 deletedPhotosCount += currentBatch.Count;
@@ -1568,18 +1577,22 @@ namespace Picksy
             {
                 ClearThumbnails();
 
-                if (currentSaveState != null && currentBatchIndex < currentSaveState.Batches.Count)
+                if (currentSaveState != null && batchIndexMapping.Count > currentBatchIndex)
                 {
-                    var currentBatchInfo = currentSaveState.Batches[currentBatchIndex];
-                    foreach (var photo in currentBatchInfo.Photos)
+                    var saveBatchIndex = batchIndexMapping[currentBatchIndex];
+                    if (saveBatchIndex < currentSaveState.Batches.Count)
                     {
-                        if (losers.Contains(photo.Path))
+                        var currentBatchInfo = currentSaveState.Batches[saveBatchIndex];
+                        foreach (var photo in currentBatchInfo.Photos)
                         {
-                            photo.Status = 1;
-                            photo.Fate = 0;
+                            if (losers.Contains(photo.Path))
+                            {
+                                photo.Status = 1;
+                                photo.Fate = 0;
+                            }
                         }
+                        SaveSaveState();
                     }
-                    SaveSaveState();
                 }
 
                 deletedPhotosCount += losers.Count;
@@ -1813,6 +1826,7 @@ namespace Picksy
             reseenPhotos.Clear();
             initialBatchSize = 0;
             batchHistory.Clear();
+            batchIndexMapping.Clear();
             ClearThumbnails();
             UpdateMainPageControlsPosition();
         }
