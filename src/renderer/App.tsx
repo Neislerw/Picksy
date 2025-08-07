@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import BatchSelector from './components/BatchSelector';
 import PhotoPairViewer from './components/PhotoPairViewer';
+import CompletionPopup from './components/CompletionPopup';
 import { Photo, PhotoBatch, SaveState } from '../types';
 import './styles/App.css';
 
@@ -11,6 +12,14 @@ const App: React.FC = () => {
   const [saveState, setSaveState] = useState<SaveState | null>(null);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [selectedFolderPath, setSelectedFolderPath] = useState<string>('');
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
+  const [completionStats, setCompletionStats] = useState<{
+    totalPhotos: number;
+    totalBatches: number;
+    keptPhotos: number;
+    deletedPhotos: number;
+    deletedSize: number;
+  } | null>(null);
 
   const handleFolderSelect = async (folderPath: string, includeSubfolders: boolean) => {
     setIsLoading(true);
@@ -95,6 +104,14 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCompletionClose = () => {
+    setShowCompletionPopup(false);
+    setCompletionStats(null);
+    setBatches([]);
+    setCurrentBatchIndex(-1);
+    setSaveState(null);
+  };
+
   const handlePhotoSelection = async (selectedPhotos: Photo[], photosToDelete: Photo[]) => {
     if (!saveState) return;
 
@@ -128,20 +145,68 @@ const App: React.FC = () => {
     });
   };
 
-  const handleBatchComplete = useCallback(() => {
+  const handleBatchComplete = useCallback(async () => {
     console.log('handleBatchComplete called', { currentBatchIndex, batchesLength: batches.length });
     // Move to next batch if available
     if (currentBatchIndex < batches.length - 1) {
       console.log('Moving to next batch', currentBatchIndex + 1);
       setCurrentBatchIndex(prev => prev + 1);
     } else {
-      console.log('All batches complete, returning to folder selection');
-      // All batches are complete
-      setBatches([]);
-      setCurrentBatchIndex(-1);
-      setSaveState(null);
+      console.log('All batches complete, calculating stats');
+      // All batches are complete - calculate stats
+      const totalPhotos = batches.reduce((sum, batch) => sum + batch.photos.length, 0);
+      
+      // Count kept and deleted photos from save state
+      let keptPhotos = 0;
+      let deletedPhotos = 0;
+      if (saveState) {
+        for (const path of saveState.processedPhotos) {
+          if (saveState.selections[path] === 'kept') {
+            keptPhotos++;
+          } else if (saveState.selections[path] === 'discarded') {
+            deletedPhotos++;
+          }
+        }
+      }
+      
+      // Calculate deleted file sizes
+      let deletedSize = 0;
+      if (saveState) {
+        const deletedPaths = saveState.processedPhotos.filter(path => 
+          saveState.selections[path] === 'discarded'
+        );
+        for (const path of deletedPaths) {
+          try {
+            const size = await window.electron?.ipcRenderer.invoke('get-file-size', path);
+            deletedSize += size || 0;
+          } catch (error) {
+            console.error('Error getting file size for:', path, error);
+          }
+        }
+      }
+      
+      const stats = {
+        totalPhotos,
+        totalBatches: batches.length,
+        keptPhotos,
+        deletedPhotos,
+        deletedSize
+      };
+      
+      console.log('Completion stats:', {
+        totalPhotos,
+        totalBatches: batches.length,
+        keptPhotos,
+        deletedPhotos,
+        deletedSize,
+        saveStateProcessedCount: saveState?.processedPhotos.length || 0,
+        saveStateSelections: saveState?.selections || {}
+      });
+      
+      setCompletionStats(stats);
+      setShowCompletionPopup(true);
     }
-  }, [currentBatchIndex, batches.length]);
+  }, [currentBatchIndex, batches.length, saveState]);
 
   const currentBatch = batches[currentBatchIndex];
   
@@ -183,8 +248,17 @@ const App: React.FC = () => {
       ) : (
         <PhotoPairViewer
           batch={currentBatch}
+          currentBatchIndex={currentBatchIndex}
+          totalBatches={batches.length}
           onSelection={handlePhotoSelection}
           onBatchComplete={handleBatchComplete}
+        />
+      )}
+      
+      {showCompletionPopup && completionStats && (
+        <CompletionPopup
+          stats={completionStats}
+          onClose={handleCompletionClose}
         />
       )}
     </div>

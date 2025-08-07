@@ -46,12 +46,22 @@
   - [x] 4.4 Ensure processed photos are skipped on reload
   - [x] 4.5 Write unit tests for save/load logic
 
-- [ ] 5.0 Optimize performance and ensure local-only processing
-  - [ ] 5.1 Profile and optimize image loading and batch detection
-  - [ ] 5.2 Ensure all processing is done locally (no network calls)
-  - [ ] 5.3 Test app responsiveness with large folders
+- [x] 5.0 UI/UX improvements and visual enhancements
+  - [x] 5.1 Fix batch display to show "Batch X/Y" format instead of "Batch batch_1"
+  - [x] 5.2 Replace photo count text with progress bar for batch completion
+  - [x] 5.3 Remove control explanations from top of screen
+  - [x] 5.4 Maximize photo display area by optimizing layout
+  - [x] 5.5 Remove bottom buttons from photo viewer
+  - [x] 5.6 Add Picksy logo to the start screen
+  - [x] 5.7 Add Picksy icon as the app icon for taskbar
+  - [x] 5.8 Implement dark theme using dark gray and black colors
 
-- [ ] 6.0 Write unit tests for core modules
-  - [ ] 6.1 Write tests for imageBatcher utility
-  - [ ] 6.2 Write tests for saveState module
-  - [ ] 6.3 Write tests for UI components
+- [ ] 6.0 Optimize performance and ensure local-only processing
+  - [ ] 6.1 Profile and optimize image loading and batch detection
+  - [ ] 6.2 Ensure all processing is done locally (no network calls)
+  - [ ] 6.3 Test app responsiveness with large folders
+
+- [ ] 7.0 Write unit tests for core modules
+  - [ ] 7.1 Write tests for imageBatcher utility
+  - [ ] 7.2 Write tests for saveState module
+  - [ ] 7.3 Write tests for UI components

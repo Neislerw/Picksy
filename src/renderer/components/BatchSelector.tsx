@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import '../styles/BatchSelector.css';
+import logoImage from '../../../resources/logo.png';
 
 interface BatchSelectorProps {
   onFolderSelect: (folderPath: string, includeSubfolders: boolean) => void;
@@ -37,8 +38,9 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
   return (
     <div className="batch-selector">
       <div className="batch-selector__header">
-        <h1>Picksy</h1>
-        <p>Select a folder to start culling your photos</p>
+        <div className="logo-container">
+          <img src={logoImage} alt="Picksy Logo" className="logo" />
+        </div>
       </div>
       
       <div className="batch-selector__content">

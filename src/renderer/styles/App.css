@@ -1,6 +1,6 @@
 .app {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: #1a1a1a;
   padding: 2rem;
   box-sizing: border-box;
 }
@@ -9,20 +9,20 @@
   max-width: 500px;
   margin: 100px auto;
   padding: 2rem;
-  background: white;
+  background: #2d2d2d;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   text-align: center;
 }
 
 .resume-prompt h2 {
   margin-bottom: 1rem;
-  color: #333;
+  color: #ffffff;
 }
 
 .resume-prompt p {
   margin-bottom: 1rem;
-  color: #666;
+  color: #cccccc;
   line-height: 1.5;
 }
 
@@ -74,5 +74,6 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
+  background-color: #1a1a1a;
+  color: #ffffff;
 }

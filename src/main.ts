@@ -7,6 +7,7 @@ function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, '../resources/logo.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -84,6 +85,29 @@ function setupIpcHandlers() {
     // Import the imageBatcher utility
     const { scanFolderAndCreateBatches } = require('./utils/imageBatcher');
     return await scanFolderAndCreateBatches(folderPath, undefined, undefined, undefined, includeSubfolders, processedPhotos);
+  });
+
+  // Handle getting file size (check both original location and _delete folder)
+  ipcMain.handle('get-file-size', async (event, filePath: string) => {
+    try {
+      // First try the original path
+      const stats = await fs.promises.stat(filePath);
+      return stats.size;
+    } catch (error) {
+      // If original path doesn't exist, try the _delete folder
+      try {
+        const rootDir = path.dirname(filePath);
+        const fileName = path.basename(filePath);
+        const deleteFolder = path.join(rootDir, '_delete');
+        const deletePath = path.join(deleteFolder, fileName);
+        
+        const stats = await fs.promises.stat(deletePath);
+        return stats.size;
+      } catch (deleteError) {
+        console.error('Error getting file size for:', filePath, deleteError);
+        return 0;
+      }
+    }
   });
 
   // Handle photo processing

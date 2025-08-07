@@ -4,6 +4,8 @@ import '../styles/PhotoPairViewer.css';
 
 interface PhotoPairViewerProps {
   batch: PhotoBatch;
+  currentBatchIndex: number;
+  totalBatches: number;
   onSelection: (selectedPhotos: Photo[], photosToDelete: Photo[]) => void;
   onBatchComplete: () => void;
 }
@@ -12,6 +14,8 @@ type SelectionAction = 'left' | 'right' | 'both' | 'neither';
 
 const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({ 
   batch, 
+  currentBatchIndex,
+  totalBatches,
   onSelection, 
   onBatchComplete 
 }) => {
@@ -236,31 +240,21 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
   return (
     <div className="photo-pair-viewer">
       <div className="photo-pair-viewer__header">
-        <h2>Batch {batch.id}</h2>
-        <p>Select your preferred photos ({remainingCount} remaining)</p>
-        <div className="photo-pair-viewer__controls">
-          <div className="control-hint">
-            <span className="key">←</span> - Keep Left Photo
+        <h2>Batch {currentBatchIndex + 1}/{totalBatches}</h2>
+        <div className="batch-progress">
+          <div className="progress-bar">
+            <div 
+              className="progress-fill" 
+              style={{ 
+                width: `${((batch.photos.length - remainingCount) / batch.photos.length) * 100}%` 
+              }}
+            />
           </div>
-          <div className="control-hint">
-            <span className="key">→</span> - Keep Right Photo
-          </div>
-          <div className="control-hint">
-            <span className="key">↑</span> - Keep Both Photos
-          </div>
-          <div className="control-hint">
-            <span className="key">↓</span> - Move Both to Delete
-          </div>
-          <div className="control-hint">
-            <span className="key">Enter</span> - Keep All Remaining
-          </div>
-          <div className="control-hint">
-            <span className="key">Space</span> - Move All Remaining to Delete
-          </div>
-          <div className="control-hint">
-            <span className="key">Z</span> - Undo
-          </div>
+          <span className="progress-text">
+            {batch.photos.length - remainingCount} of {batch.photos.length} photos processed
+          </span>
         </div>
+
       </div>
 
       <div className="photo-pair-viewer__content">
@@ -294,51 +288,7 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
           </div>
         </div>
 
-        <div className="photo-pair-viewer__actions">
-          <button 
-            onClick={() => handleSelection('left')}
-            className="action-button action-button--left"
-          >
-            Keep Left
-          </button>
-          <button 
-            onClick={() => handleSelection('both')}
-            className="action-button action-button--both"
-          >
-            Keep Both
-          </button>
-          <button 
-            onClick={() => handleSelection('right')}
-            className="action-button action-button--right"
-          >
-            Keep Right
-          </button>
-          <button 
-            onClick={() => handleSelection('neither')}
-            className="action-button action-button--neither"
-          >
-            Move Both to Delete
-          </button>
-          <button 
-            onClick={handleKeepAllRemaining}
-            className="action-button action-button--keep-all"
-          >
-            Keep All Remaining
-          </button>
-          <button 
-            onClick={handleMoveAllRemaining}
-            className="action-button action-button--move-all"
-          >
-            Move All Remaining to Delete
-          </button>
-          <button 
-            onClick={handleUndo}
-            className="action-button action-button--undo"
-            disabled={currentPairIndex === 0}
-          >
-            Undo
-          </button>
-        </div>
+
       </div>
     </div>
   );
