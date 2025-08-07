@@ -21,7 +21,7 @@ const App: React.FC = () => {
     deletedSize: number;
   } | null>(null);
 
-  const handleFolderSelect = async (folderPath: string, includeSubfolders: boolean) => {
+  const handleFolderSelect = async (folderPath: string, includeSubfolders: boolean, settings: any) => {
     setIsLoading(true);
     try {
       // Check if save state exists
@@ -35,18 +35,18 @@ const App: React.FC = () => {
         setShowResumePrompt(true);
       } else {
         // No save state, start fresh
-        await startProcessing(folderPath, includeSubfolders);
+        await startProcessing(folderPath, includeSubfolders, [], settings);
       }
     } catch (error) {
       console.error('Error checking save state:', error);
       // Fallback to starting fresh
-      await startProcessing(folderPath, includeSubfolders);
+      await startProcessing(folderPath, includeSubfolders, [], settings);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const startProcessing = async (folderPath: string, includeSubfolders: boolean, processedPhotos: string[] = []) => {
+  const startProcessing = async (folderPath: string, includeSubfolders: boolean, processedPhotos: string[] = [], settings?: any) => {
     setIsLoading(true);
     try {
       // Create new save state if none exists (do this first)
@@ -69,7 +69,7 @@ const App: React.FC = () => {
       }
       
       // Call the main process to scan the folder and create batches
-      const newBatches = await window.electron?.ipcRenderer.invoke('scan-folder', folderPath, includeSubfolders, processedPhotos);
+      const newBatches = await window.electron?.ipcRenderer.invoke('scan-folder', folderPath, includeSubfolders, processedPhotos, settings);
       if (newBatches && newBatches.length > 0) {
         setBatches(newBatches);
         setCurrentBatchIndex(0);

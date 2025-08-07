@@ -81,10 +81,16 @@ function setupIpcHandlers() {
   });
 
   // Handle folder scanning with save state support
-  ipcMain.handle('scan-folder', async (event, folderPath: string, includeSubfolders: boolean = true, processedPhotos: string[] = []) => {
+  ipcMain.handle('scan-folder', async (event, folderPath: string, includeSubfolders: boolean = true, processedPhotos: string[] = [], settings?: any) => {
     // Import the imageBatcher utility
     const { scanFolderAndCreateBatches } = require('./utils/imageBatcher');
-    return await scanFolderAndCreateBatches(folderPath, undefined, undefined, undefined, includeSubfolders, processedPhotos);
+    
+    // Use settings if provided, otherwise use defaults
+    const timeWindow = settings?.batchTimeWindow ? settings.batchTimeWindow * 1000 : 30 * 1000; // Convert to milliseconds
+    const minBatchSize = settings?.minBatchSize || 2;
+    const maxBatchSize = settings?.maxBatchSize || 20;
+    
+    return await scanFolderAndCreateBatches(folderPath, timeWindow, minBatchSize, maxBatchSize, includeSubfolders, processedPhotos);
   });
 
   // Handle getting file size (check both original location and _delete folder)

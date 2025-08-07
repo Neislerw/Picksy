@@ -50,7 +50,7 @@
   },
   "build": {
     "appId": "com.photoculling.app",
-    "productName": "Photo Culling App",
+    "productName": "Picksy - Photo Selction Tool",
     "directories": {
       "output": "dist"
     },

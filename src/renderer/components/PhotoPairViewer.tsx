@@ -134,35 +134,46 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
 
   // Handle keeping all remaining photos in the batch
   const handleKeepAllRemaining = useCallback(() => {
-    // Add all remaining photos to selected list
-    setSelectedPhotos(prev => [...prev, ...remainingPhotos]);
+    // Add all remaining photos to selected list and complete the batch
+    setSelectedPhotos(prev => {
+      const newSelectedPhotos = [...prev, ...remainingPhotos];
+      // Complete the batch with updated state
+      onSelection(newSelectedPhotos, photosToDelete);
+      onBatchComplete();
+      return newSelectedPhotos;
+    });
     // Clear the remaining photos pool
     setRemainingPhotos([]);
-    // Complete the batch
-    onSelection([...selectedPhotos, ...remainingPhotos], photosToDelete);
-    onBatchComplete();
-  }, [remainingPhotos, selectedPhotos, photosToDelete, onSelection, onBatchComplete]);
+  }, [remainingPhotos, photosToDelete, onSelection, onBatchComplete]);
 
   // Handle moving all remaining photos in the batch to delete folder
   const handleMoveAllRemaining = useCallback(() => {
-    // Add all remaining photos to delete list
-    setPhotosToDelete(prev => [...prev, ...remainingPhotos]);
+    console.log('handleMoveAllRemaining called with remainingPhotos:', remainingPhotos.length);
+    // Add all remaining photos to delete list and complete the batch
+    setPhotosToDelete(prev => {
+      const newPhotosToDelete = [...prev, ...remainingPhotos];
+      console.log('Moving all remaining photos to delete:', remainingPhotos.length, 'photos');
+      // Complete the batch with updated state
+      onSelection(selectedPhotos, newPhotosToDelete);
+      onBatchComplete();
+      return newPhotosToDelete;
+    });
     // Clear the remaining photos pool
     setRemainingPhotos([]);
-    // Complete the batch
-    onSelection(selectedPhotos, [...photosToDelete, ...remainingPhotos]);
-    onBatchComplete();
-  }, [remainingPhotos, selectedPhotos, photosToDelete, onSelection, onBatchComplete]);
+  }, [remainingPhotos, selectedPhotos, onSelection, onBatchComplete]);
 
   // Handle undo (go back to previous pair)
   const handleUndo = useCallback(() => {
+    console.log('handleUndo called, currentPairIndex:', currentPairIndex);
     if (currentPairIndex > 0) {
+      console.log('Undoing to previous pair');
       setCurrentPairIndex(prev => prev - 1);
       // Remove the last selected photos from the selection
       setSelectedPhotos(prev => {
         const currentPair = getCurrentPair();
         if (currentPair) {
           const [leftPhoto, rightPhoto] = currentPair;
+          console.log('Removing photos from selection:', leftPhoto.filename, rightPhoto.filename);
           return prev.filter(photo => photo.id !== leftPhoto.id && photo.id !== rightPhoto.id);
         }
         return prev;
@@ -172,44 +183,66 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
         const currentPair = getCurrentPair();
         if (currentPair) {
           const [leftPhoto, rightPhoto] = currentPair;
+          console.log('Removing photos from delete list:', leftPhoto.filename, rightPhoto.filename);
           return prev.filter(photo => photo.id !== leftPhoto.id && photo.id !== rightPhoto.id);
         }
         return prev;
       });
+    } else {
+      console.log('Cannot undo - already at first pair');
     }
   }, [currentPairIndex, remainingPhotos]);
 
   // Handle keyboard input
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
+    console.log('Key pressed:', event.key, event.key.toLowerCase(), 'code:', event.code);
+    
+    // Prevent default behavior for keys we handle
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Space', 'KeyZ'].includes(event.code)) {
+      event.preventDefault();
+    }
+    
     switch (event.key.toLowerCase()) {
       case 'arrowleft':
+        console.log('Left arrow pressed');
         handleSelection('left');
         break;
       case 'arrowright':
+        console.log('Right arrow pressed');
         handleSelection('right');
         break;
       case 'arrowup':
+        console.log('Up arrow pressed');
         handleSelection('both');
         break;
       case 'arrowdown':
+        console.log('Down arrow pressed');
         handleSelection('neither');
         break;
       case 'enter':
+        console.log('Enter pressed');
         handleKeepAllRemaining();
         break;
+      case ' ':
       case 'space':
+        console.log('Space key pressed - moving all remaining photos to delete');
         handleMoveAllRemaining();
         break;
       case 'z':
+        console.log('Z key pressed - undo');
         handleUndo();
         break;
+      default:
+        console.log('Unhandled key:', event.key, 'code:', event.code);
     }
   }, [handleSelection, handleKeepAllRemaining, handleMoveAllRemaining, handleUndo]);
 
   // Set up keyboard event listeners
   useEffect(() => {
+    console.log('Setting up keyboard event listener');
     window.addEventListener('keydown', handleKeyPress);
     return () => {
+      console.log('Removing keyboard event listener');
       window.removeEventListener('keydown', handleKeyPress);
     };
   }, [handleKeyPress]);
