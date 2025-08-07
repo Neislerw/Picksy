@@ -54,6 +54,13 @@ const App: React.FC = () => {
             selections: {}
           };
           setSaveState(newSaveState);
+          
+          // Save the initial save state to disk
+          try {
+            await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
+          } catch (error) {
+            console.error('Failed to create initial save state:', error);
+          }
         }
       }
     } catch (error) {
