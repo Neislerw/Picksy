@@ -40,28 +40,28 @@ const App: React.FC = () => {
   const startProcessing = async (folderPath: string, includeSubfolders: boolean, processedPhotos: string[] = []) => {
     setIsLoading(true);
     try {
+      // Create new save state if none exists (do this first)
+      if (!saveState) {
+        const newSaveState = {
+          folderPath,
+          processedPhotos,
+          selections: {}
+        };
+        
+        // Save the initial save state to disk first
+        try {
+          await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
+          setSaveState(newSaveState);
+        } catch (error) {
+          console.error('Failed to create initial save state:', error);
+        }
+      }
+      
       // Call the main process to scan the folder and create batches
       const newBatches = await window.electron?.ipcRenderer.invoke('scan-folder', folderPath, includeSubfolders, processedPhotos);
       if (newBatches && newBatches.length > 0) {
         setBatches(newBatches);
         setCurrentBatchIndex(0);
-        
-        // Create new save state if none exists
-        if (!saveState) {
-          const newSaveState = {
-            folderPath,
-            processedPhotos,
-            selections: {}
-          };
-          setSaveState(newSaveState);
-          
-          // Save the initial save state to disk
-          try {
-            await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
-          } catch (error) {
-            console.error('Failed to create initial save state:', error);
-          }
-        }
       }
     } catch (error) {
       console.error('Error scanning folder:', error);
