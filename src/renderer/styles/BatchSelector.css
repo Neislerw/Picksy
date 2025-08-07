@@ -1,0 +1,121 @@
+.batch-selector {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.batch-selector__header {
+  margin-bottom: 2rem;
+}
+
+.batch-selector__header h1 {
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.batch-selector__header p {
+  font-size: 1.1rem;
+  color: #7f8c8d;
+  margin: 0;
+}
+
+.batch-selector__content {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.folder-input {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.folder-input__field {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.folder-input__field:focus {
+  outline: none;
+  border-color: #3498db;
+  background: white;
+}
+
+.folder-input__button {
+  padding: 0.75rem 1.5rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.folder-input__button:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.folder-input__button:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.folder-input__button--primary {
+  background: #27ae60;
+}
+
+.folder-input__button--primary:hover:not(:disabled) {
+  background: #229954;
+}
+
+.options {
+  margin: 1.5rem 0;
+  padding: 1rem 0;
+  border-top: 1px solid #e1e8ed;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #2c3e50;
+}
+
+.checkbox-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3498db;
+}
+
+.checkbox-option span {
+  user-select: none;
+}
+
+.folder-info {
+  padding: 1rem;
+  background: #e8f4fd;
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+}
+
+.folder-info p {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 0.9rem;
+} 

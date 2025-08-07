@@ -1,0 +1,264 @@
+.photo-pair-viewer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.photo-pair-viewer__header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.photo-pair-viewer__header h2 {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.photo-pair-viewer__header p {
+  color: #7f8c8d;
+  margin-bottom: 1.5rem;
+}
+
+.photo-pair-viewer__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.control-hint {
+  background: #f8f9fa;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #495057;
+  text-align: center;
+}
+
+.key {
+  background: #e9ecef;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-weight: bold;
+  color: #495057;
+}
+
+.photo-pair-viewer__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.photo-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.photo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.photo-image {
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.photo-image:hover {
+  transform: scale(1.02);
+}
+
+.photo-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.photo-filename {
+  font-weight: 500;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.photo-timestamp {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
+
+.photo-pair-viewer__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.action-button {
+  padding: 1rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.action-button--left {
+  background: #3498db;
+  color: white;
+}
+
+.action-button--left:hover {
+  background: #2980b9;
+  transform: translateY(-2px);
+}
+
+.action-button--right {
+  background: #e74c3c;
+  color: white;
+}
+
+.action-button--right:hover {
+  background: #c0392b;
+  transform: translateY(-2px);
+}
+
+.action-button--both {
+  background: #27ae60;
+  color: white;
+}
+
+.action-button--both:hover {
+  background: #229954;
+  transform: translateY(-2px);
+}
+
+.action-button--neither {
+  background: #95a5a6;
+  color: white;
+}
+
+ .action-button--neither:hover {
+   background: #7f8c8d;
+   transform: translateY(-2px);
+ }
+
+ .action-button--keep-all {
+   background: #9b59b6;
+   color: white;
+ }
+
+ .action-button--keep-all:hover {
+   background: #8e44ad;
+   transform: translateY(-2px);
+ }
+
+ .action-button--move-all {
+   background: #e67e22;
+   color: white;
+ }
+
+ .action-button--move-all:hover {
+   background: #d35400;
+   transform: translateY(-2px);
+ }
+
+ .action-button--undo {
+   background: #34495e;
+   color: white;
+ }
+
+ .action-button--undo:hover:not(:disabled) {
+   background: #2c3e50;
+   transform: translateY(-2px);
+ }
+
+ .action-button--undo:disabled {
+   background: #bdc3c7;
+   color: #95a5a6;
+   cursor: not-allowed;
+   transform: none;
+ }
+
+.photo-pair-viewer__complete {
+  text-align: center;
+  padding: 3rem;
+}
+
+.photo-pair-viewer__complete h2 {
+  font-size: 2rem;
+  color: #27ae60;
+  margin-bottom: 1rem;
+}
+
+.photo-pair-viewer__complete p {
+  color: #7f8c8d;
+  margin-bottom: 2rem;
+}
+
+.photo-pair-viewer__button {
+  padding: 1rem 2rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.photo-pair-viewer__button:hover {
+  background: #2980b9;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .photo-pair {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .photo-pair-viewer__actions {
+    grid-template-columns: 1fr;
+  }
+  
+  .photo-pair-viewer__controls {
+    grid-template-columns: 1fr;
+  }
+  
+  .photo-image {
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .photo-pair-viewer {
+    padding: 1rem;
+  }
+  
+  .photo-pair-viewer__header h2 {
+    font-size: 1.5rem;
+  }
+  
+  .action-button {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+} 
