@@ -50,7 +50,9 @@ const App: React.FC = () => {
         
         // Save the initial save state to disk first
         try {
+          console.log('Creating initial save state for:', folderPath);
           await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
+          console.log('Initial save state created successfully');
           setSaveState(newSaveState);
         } catch (error) {
           console.error('Failed to create initial save state:', error);

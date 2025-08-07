@@ -35,24 +35,43 @@ function setupIpcHandlers() {
 
   // Handle save state operations
   ipcMain.handle('save-state-exists', async (event, folderPath: string) => {
-    const { saveStateExists } = require('./renderer/state/saveState');
-    return await saveStateExists(folderPath);
+    try {
+      const { saveStateExists } = require('./utils/saveState');
+      console.log('save-state-exists called for:', folderPath);
+      return await saveStateExists(folderPath);
+    } catch (error) {
+      console.error('Error in save-state-exists:', error);
+      return false;
+    }
   });
 
   ipcMain.handle('load-save-state', async (event, folderPath: string) => {
-    const { loadSaveState } = require('./renderer/state/saveState');
-    return await loadSaveState(folderPath);
+    try {
+      const { loadSaveState } = require('./utils/saveState');
+      console.log('load-save-state called for:', folderPath);
+      return await loadSaveState(folderPath);
+    } catch (error) {
+      console.error('Error in load-save-state:', error);
+      return null;
+    }
   });
 
   ipcMain.handle('save-save-state', async (event, saveState) => {
-    const { saveSaveState } = require('./renderer/state/saveState');
-    return await saveSaveState(saveState);
+    try {
+      const { saveSaveState } = require('./utils/saveState');
+      console.log('save-save-state called for:', saveState.folderPath);
+      return await saveSaveState(saveState);
+    } catch (error) {
+      console.error('Error in save-save-state:', error);
+      throw error;
+    }
   });
 
   ipcMain.handle('delete-save-state', async (event, folderPath: string) => {
-    const { getSaveStatePath } = require('./renderer/state/saveState');
-    const saveStatePath = getSaveStatePath(folderPath);
     try {
+      const { getSaveStatePath } = require('./utils/saveState');
+      const saveStatePath = getSaveStatePath(folderPath);
+      console.log('delete-save-state called for:', folderPath);
       await fs.promises.unlink(saveStatePath);
     } catch (error) {
       console.warn('Failed to delete save state:', error);
