@@ -161,17 +161,18 @@ describe('imageBatcher', () => {
 
   describe('getPhotoTimestamp', () => {
     const mockStats = {
-      mtime: new Date('2023-01-01T10:00:00Z')
-    } as fs.Stats;
+      birthtime: new Date('2023-01-01T10:00:00Z'),
+      mtime: new Date('2023-01-01T12:00:00Z')
+    } as unknown as fs.Stats;
 
-    it('should fallback to file stats when EXIF extraction fails', async () => {
+    it('should fallback to file created time when EXIF extraction fails', async () => {
       const result = await getPhotoTimestamp('/path/photo.jpg', mockStats);
-      expect(result).toEqual(mockStats.mtime);
+      expect(result).toEqual(mockStats.birthtime);
     });
 
     it('should handle errors gracefully', async () => {
       const result = await getPhotoTimestamp('/path/photo.jpg', mockStats);
-      expect(result).toEqual(mockStats.mtime);
+      expect(result).toEqual(mockStats.birthtime);
     });
   });
 }); 

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import BatchSelector from './components/BatchSelector';
 import PhotoPairViewer from './components/PhotoPairViewer';
+import ThumbnailStripCuller from './components/ThumbnailStripCuller';
 import CompletionPopup from './components/CompletionPopup';
 import { Photo, PhotoBatch, SaveState } from '../types';
 import './styles/App.css';
@@ -20,10 +21,20 @@ const App: React.FC = () => {
     deletedPhotos: number;
     deletedSize: number;
   } | null>(null);
+  const [selectedMode, setSelectedMode] = useState<'tournament' | 'thumbnail'>('tournament');
+  const [showSkipProcessedPrompt, setShowSkipProcessedPrompt] = useState(false);
+  const [flatPhotos, setFlatPhotos] = useState<Photo[]>([]);
 
-  const handleFolderSelect = async (folderPath: string, includeSubfolders: boolean, settings: any) => {
+  const handleFolderSelect = async (
+    folderPath: string,
+    includeSubfolders: boolean,
+    settings: any,
+    mode: 'tournament' | 'thumbnail'
+  ) => {
     setIsLoading(true);
     try {
+      setSelectedMode(mode);
+      setSelectedFolderPath(folderPath);
       // Check if save state exists
       const hasSaveState = await window.electron?.ipcRenderer.invoke('save-state-exists', folderPath);
       
@@ -31,18 +42,51 @@ const App: React.FC = () => {
         // Load existing save state and show resume prompt
         const existingSaveState = await window.electron?.ipcRenderer.invoke('load-save-state', folderPath);
         setSaveState(existingSaveState);
-        setSelectedFolderPath(folderPath);
-        setShowResumePrompt(true);
+        if (mode === 'thumbnail') {
+          // For thumbnail mode, ask whether to skip processed photos instead of resume
+          setShowSkipProcessedPrompt(true);
+        } else {
+          setShowResumePrompt(true);
+        }
       } else {
-        // No save state, start fresh
-        await startProcessing(folderPath, includeSubfolders, [], settings);
+        // No save state
+        if (mode === 'thumbnail') {
+          const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
+          setFlatPhotos(photos || []);
+        } else {
+          await startProcessing(folderPath, includeSubfolders, [], settings);
+        }
       }
     } catch (error) {
       console.error('Error checking save state:', error);
-      // Fallback to starting fresh
-      await startProcessing(folderPath, includeSubfolders, [], settings);
+      // Fallback: load something sensible for the chosen mode
+      if (mode === 'thumbnail') {
+        const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
+        setFlatPhotos(photos || []);
+      } else {
+        await startProcessing(folderPath, includeSubfolders, [], settings);
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSkipProcessedYes = async () => {
+    // Skip processed photos from the save state
+    if (saveState) {
+      // For thumbnail mode, we need a flat photo list filtered by processed
+      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, true, saveState.processedPhotos);
+      setFlatPhotos(photos || []);
+      setShowSkipProcessedPrompt(false);
+    }
+  };
+
+  const handleSkipProcessedNo = async () => {
+    // Include all photos regardless of previous processing
+    if (saveState) {
+      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, true, []);
+      setFlatPhotos(photos || []);
+      setShowSkipProcessedPrompt(false);
     }
   };
 
@@ -139,10 +183,15 @@ const App: React.FC = () => {
     }
 
     // Handle the selected photos (keep them in place) and move others to delete folder
-    window.electron?.ipcRenderer.invoke('process-photos', {
-      selectedPhotos,
-      photosToDelete
-    });
+    try {
+      const results = await window.electron?.ipcRenderer.invoke('process-photos', {
+        selectedPhotos,
+        photosToDelete
+      });
+      console.log('process-photos results:', results);
+    } catch (err) {
+      console.error('process-photos failed:', err);
+    }
   };
 
   const handleBatchComplete = useCallback(async () => {
@@ -238,14 +287,44 @@ const App: React.FC = () => {
     );
   }
 
+  // Show skip processed prompt for thumbnail mode
+  if (showSkipProcessedPrompt) {
+    return (
+      <div className="app">
+        <div className="resume-prompt">
+          <h2>Skip Photos Already Processed?</h2>
+          <p>We found a previous Tournament Mode session for this folder.</p>
+          <p>Would you like to hide photos that were already processed?</p>
+          <div className="resume-buttons">
+            <button onClick={handleSkipProcessedYes} disabled={isLoading}>
+              {isLoading ? 'Loading...' : 'Skip Processed'}
+            </button>
+            <button onClick={handleSkipProcessedNo} disabled={isLoading}>
+              Show All
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const shouldShowThumbnail = selectedMode === 'thumbnail' && flatPhotos.length > 0;
+
   return (
     <div className="app">
-      {currentBatchIndex === -1 || !currentBatch ? (
-        <BatchSelector 
-          onFolderSelect={handleFolderSelect}
-          isLoading={isLoading}
+      {shouldShowThumbnail ? (
+        <ThumbnailStripCuller 
+          folderPath={selectedFolderPath} 
+          photos={flatPhotos} 
+          onExit={() => {
+            // Clear thumbnail state and go back to start
+            setFlatPhotos([]);
+            setBatches([]);
+            setCurrentBatchIndex(-1);
+            setSaveState(null);
+          }}
         />
-      ) : (
+      ) : currentBatchIndex !== -1 && currentBatch && selectedMode === 'tournament' ? (
         <PhotoPairViewer
           batch={currentBatch}
           currentBatchIndex={currentBatchIndex}
@@ -253,8 +332,13 @@ const App: React.FC = () => {
           onSelection={handlePhotoSelection}
           onBatchComplete={handleBatchComplete}
         />
+      ) : (
+        <BatchSelector 
+          onFolderSelect={handleFolderSelect}
+          isLoading={isLoading}
+        />
       )}
-      
+
       {showCompletionPopup && completionStats && (
         <CompletionPopup
           stats={completionStats}

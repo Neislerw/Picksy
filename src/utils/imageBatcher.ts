@@ -10,6 +10,9 @@ const DEFAULT_BATCH_TIME_WINDOW = 30 * 1000; // 30 seconds
 const DEFAULT_MIN_BATCH_SIZE = 2; // Minimum photos in a batch
 const DEFAULT_MAX_BATCH_SIZE = 20; // Maximum photos in a batch
 
+// Sorting modes for ordering and batching
+export type SortingMode = 'dateTaken' | 'dateCreated' | 'filename';
+
 /**
  * Check if a file is an image based on its extension
  */
@@ -23,33 +26,53 @@ export function isImageFile(filename: string): boolean {
  */
 export async function extractExifData(filePath: string): Promise<any> {
   try {
-    const buffer = await fs.promises.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
-    
-    // Only process JPEG files for EXIF (most common format with EXIF data)
+
+    // Prefer robust EXIF parsing via exifr when available
+    if (ext === '.jpg' || ext === '.jpeg' || ext === '.heic' || ext === '.heif') {
+      try {
+        const exifr = require('exifr');
+        const data = await exifr.parse(filePath, { tiff: true, ifd0: true, exif: true });
+        if (data) {
+          console.log(`exifr parsed for ${path.basename(filePath)}:`, {
+            hasDateTimeOriginal: !!(data as any)?.DateTimeOriginal,
+            hasCreateDate: !!(data as any)?.CreateDate,
+          });
+          return data;
+        }
+      } catch (err) {
+        console.warn(`exifr failed for ${filePath}, falling back to manual parse:`, err);
+      }
+    }
+
+    // Manual fallback for JPEG using exif-reader
+    const buffer = await fs.promises.readFile(filePath);
     if (ext === '.jpg' || ext === '.jpeg') {
       const exifReader = require('exif-reader');
-      
-      // Find EXIF marker in JPEG
       let offset = 0;
       while (offset < buffer.length - 1) {
         if (buffer[offset] === 0xFF && buffer[offset + 1] === 0xE1) {
-          // Found EXIF marker
-          const exifLength = buffer.readUInt16BE(offset + 2);
-          const exifData = buffer.slice(offset + 4, offset + 4 + exifLength);
-          
+          const segmentLength = buffer.readUInt16BE(offset + 2);
+          const segmentStart = offset + 4;
+          const exifData = buffer.slice(segmentStart, segmentStart + segmentLength);
+
+          // Verify EXIF header signature 'Exif\0\0'
+          const header = exifData.slice(0, 6).toString('ascii');
+          if (header !== 'Exif\u0000\u0000' && header !== 'Exif\x00\x00') {
+            offset += 2; // skip ahead
+            continue;
+          }
+
           try {
             const exif = exifReader(exifData);
-            console.log(`EXIF data extracted for ${path.basename(filePath)}:`, {
+            console.log(`EXIF data extracted for ${path.basename(filePath)} (manual):`, {
               hasExif: !!exif,
               hasExifData: !!(exif && exif.exif),
               dateTimeOriginal: exif?.exif?.DateTimeOriginal,
-              dateTime: exif?.exif?.DateTime,
-              subsecTimeOriginal: exif?.exif?.SubsecTimeOriginal
             });
             return exif;
           } catch (error) {
-            console.warn(`Failed to parse EXIF data for ${filePath}:`, error);
+            console.warn(`Failed to parse EXIF data (manual) for ${filePath}:`, error);
           }
         }
         offset++;
@@ -58,7 +81,7 @@ export async function extractExifData(filePath: string): Promise<any> {
     } else {
       console.log(`Skipping EXIF extraction for ${path.basename(filePath)} (format: ${ext})`);
     }
-    
+
     return null;
   } catch (error) {
     console.warn(`Failed to read EXIF data for ${filePath}:`, error);
@@ -138,19 +161,24 @@ export async function getPhotoTimestamp(filePath: string, stats: fs.Stats): Prom
     console.log(`\n=== Timestamp extraction for ${filename} ===`);
     console.log(`File created time: ${stats.birthtime.toISOString()}`);
     
-    // 1. Try EXIF DateTimeOriginal (Date Taken) - highest priority
-    if (exifData?.exif?.DateTimeOriginal) {
-      console.log(`Found EXIF DateTimeOriginal: ${exifData.exif.DateTimeOriginal}`);
-      const dateTaken = parseExifDate(exifData.exif.DateTimeOriginal);
-      if (dateTaken) {
-        console.log(`${filename}: ✅ Using EXIF DateTimeOriginal (Date Taken): ${dateTaken.toISOString()}`);
-        return dateTaken;
-      } else {
-        console.log(`${filename}: ❌ Failed to parse EXIF DateTimeOriginal: ${exifData.exif.DateTimeOriginal}`);
-      }
-    } else {
-      console.log(`${filename}: No EXIF DateTimeOriginal found`);
+  // 1. Try EXIF DateTimeOriginal (Date Taken) - highest priority
+  const exifDateCandidate: any = (exifData && (exifData.exif?.DateTimeOriginal ?? (exifData as any).DateTimeOriginal));
+  if (exifDateCandidate) {
+    let dateTaken: Date | null = null;
+    if (exifDateCandidate instanceof Date) {
+      dateTaken = exifDateCandidate;
+    } else if (typeof exifDateCandidate === 'string') {
+      dateTaken = parseExifDate(exifDateCandidate);
     }
+    if (dateTaken) {
+      console.log(`${filename}: ✅ Using EXIF DateTimeOriginal (Date Taken): ${dateTaken.toISOString()}`);
+      return dateTaken;
+    } else {
+      console.log(`${filename}: ❌ Failed to parse EXIF DateTimeOriginal: ${exifDateCandidate}`);
+    }
+  } else {
+    console.log(`${filename}: No EXIF DateTimeOriginal found`);
+  }
     
     // 2. Try timestamp from filename (format: YYYYMMDD_HHMMSS.jpg)
     const filenameTimestamp = parseTimestampFromFilename(filename);
@@ -188,7 +216,7 @@ export async function getFileStats(filePath: string): Promise<fs.Stats> {
 /**
  * Recursively scan a directory for image files
  */
-export async function scanDirectoryForImages(dirPath: string, includeSubfolders: boolean = true): Promise<Photo[]> {
+export async function scanDirectoryForImages(dirPath: string, includeSubfolders: boolean = true, sortingMode: SortingMode = 'dateTaken'): Promise<Photo[]> {
   const photos: Photo[] = [];
   
   try {
@@ -205,12 +233,19 @@ export async function scanDirectoryForImages(dirPath: string, includeSubfolders:
         }
         // Only scan subdirectories if includeSubfolders is true
         if (includeSubfolders) {
-          const subPhotos = await scanDirectoryForImages(fullPath, includeSubfolders);
+          const subPhotos = await scanDirectoryForImages(fullPath, includeSubfolders, sortingMode);
           photos.push(...subPhotos);
         }
       } else if (stats.isFile() && isImageFile(item)) {
-        // Get the best available timestamp
-        const timestamp = await getPhotoTimestamp(fullPath, stats);
+        // Choose timestamp source based on sorting mode
+        let timestamp: Date;
+        if (sortingMode === 'dateCreated') {
+          timestamp = stats.birthtime;
+        } else {
+          // For dateTaken and filename modes, we still attempt best timestamp.
+          // In filename mode, timestamp will not be used for sorting, but is retained for metadata.
+          timestamp = await getPhotoTimestamp(fullPath, stats);
+        }
         
         // Create Photo object with metadata
         const photo: Photo = {
@@ -244,7 +279,8 @@ export function groupPhotosIntoBatches(
   photos: Photo[],
   timeWindow: number = DEFAULT_BATCH_TIME_WINDOW,
   minBatchSize: number = DEFAULT_MIN_BATCH_SIZE,
-  maxBatchSize: number = DEFAULT_MAX_BATCH_SIZE
+  maxBatchSize: number = DEFAULT_MAX_BATCH_SIZE,
+  sortingMode: SortingMode = 'dateTaken'
 ): PhotoBatch[] {
   if (photos.length === 0) {
     return [];
@@ -265,6 +301,21 @@ export function groupPhotosIntoBatches(
     const timeDiffDays = timeDiff / (1000 * 60 * 60 * 24);
     
     console.log(`Time diff between ${path.basename(photos[i-1].filename)} and ${path.basename(photos[i].filename)}: ${timeDiffMinutes.toFixed(1)} minutes (${timeDiffHours.toFixed(1)} hours, ${timeDiffDays.toFixed(1)} days)`);
+  }
+
+  // For filename sorting mode, group sequentially by size (ignore time window)
+  if (sortingMode === 'filename') {
+    const batches: PhotoBatch[] = [];
+    let batchId = 1;
+    for (let i = 0; i < photos.length; i += maxBatchSize) {
+      const chunk = photos.slice(i, i + maxBatchSize);
+      if (chunk.length >= minBatchSize) {
+        batches.push({ id: `batch_${batchId}`, photos: chunk, processed: false });
+        batchId++;
+      }
+    }
+    console.log(`Created ${batches.length} batches total (filename mode)`);
+    return batches;
   }
 
   const batches: PhotoBatch[] = [];
@@ -337,12 +388,17 @@ export function groupPhotosIntoBatches(
 /**
  * Main function to scan a folder and return sorted image files
  */
-export async function scanFolderForImages(folderPath: string, includeSubfolders: boolean = true): Promise<Photo[]> {
-  console.log(`Scanning folder: ${folderPath} (includeSubfolders: ${includeSubfolders})`);
+export async function scanFolderForImages(folderPath: string, includeSubfolders: boolean = true, sortingMode: SortingMode = 'dateTaken'): Promise<Photo[]> {
+  console.log(`Scanning folder: ${folderPath} (includeSubfolders: ${includeSubfolders}, sortingMode: ${sortingMode})`);
   
   try {
-    const photos = await scanDirectoryForImages(folderPath, includeSubfolders);
-    const sortedPhotos = sortPhotosByTimestamp(photos);
+    const photos = await scanDirectoryForImages(folderPath, includeSubfolders, sortingMode);
+    let sortedPhotos: Photo[];
+    if (sortingMode === 'filename') {
+      sortedPhotos = [...photos].sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }));
+    } else {
+      sortedPhotos = sortPhotosByTimestamp(photos);
+    }
     
     console.log(`Found ${sortedPhotos.length} image files`);
     return sortedPhotos;
@@ -361,19 +417,20 @@ export async function scanFolderAndCreateBatches(
   minBatchSize: number = DEFAULT_MIN_BATCH_SIZE,
   maxBatchSize: number = DEFAULT_MAX_BATCH_SIZE,
   includeSubfolders: boolean = true,
-  processedPhotos: string[] = []
+  processedPhotos: string[] = [],
+  sortingMode: SortingMode = 'dateTaken'
 ): Promise<PhotoBatch[]> {
-  console.log(`Scanning folder and creating batches: ${folderPath} (includeSubfolders: ${includeSubfolders})`);
+  console.log(`Scanning folder and creating batches: ${folderPath} (includeSubfolders: ${includeSubfolders}, sortingMode: ${sortingMode})`);
   
   try {
-    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders);
+    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders, sortingMode);
     
     // Filter out already processed photos
     const unprocessedPhotos = allPhotos.filter(photo => !processedPhotos.includes(photo.path));
     
     console.log(`Found ${allPhotos.length} total photos, ${unprocessedPhotos.length} unprocessed`);
     
-    const batches = groupPhotosIntoBatches(unprocessedPhotos, timeWindow, minBatchSize, maxBatchSize);
+    const batches = groupPhotosIntoBatches(unprocessedPhotos, timeWindow, minBatchSize, maxBatchSize, sortingMode);
     
     console.log(`Created ${batches.length} batches from ${unprocessedPhotos.length} unprocessed photos`);
     return batches;
@@ -381,4 +438,4 @@ export async function scanFolderAndCreateBatches(
     console.error('Error scanning folder and creating batches:', error);
     throw error;
   }
-} 
+}

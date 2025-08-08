@@ -26,6 +26,17 @@ function createWindow(): void {
 
 // Set up IPC handlers
 function setupIpcHandlers() {
+  function ensureUniquePath(targetDir: string, fileName: string): string {
+    const base = path.parse(fileName).name;
+    const ext = path.parse(fileName).ext;
+    let candidate = path.join(targetDir, fileName);
+    let counter = 1;
+    while (fs.existsSync(candidate)) {
+      candidate = path.join(targetDir, `${base} (${counter})${ext}`);
+      counter += 1;
+    }
+    return candidate;
+  }
   // Handle folder selection
   ipcMain.handle('select-folder', async () => {
     const result = await dialog.showOpenDialog({
@@ -89,8 +100,19 @@ function setupIpcHandlers() {
     const timeWindow = settings?.batchTimeWindow ? settings.batchTimeWindow * 1000 : 30 * 1000; // Convert to milliseconds
     const minBatchSize = settings?.minBatchSize || 2;
     const maxBatchSize = settings?.maxBatchSize || 20;
+    const sortingMode = settings?.sortingMode || 'dateTaken';
     
-    return await scanFolderAndCreateBatches(folderPath, timeWindow, minBatchSize, maxBatchSize, includeSubfolders, processedPhotos);
+    return await scanFolderAndCreateBatches(folderPath, timeWindow, minBatchSize, maxBatchSize, includeSubfolders, processedPhotos, sortingMode);
+  });
+
+  // Flat scan for photos (no batching) with optional processed filtering
+  ipcMain.handle('scan-folder-photos', async (event, folderPath: string, includeSubfolders: boolean = true, processedPhotos: string[] = []) => {
+    const { scanFolderForImages } = require('./utils/imageBatcher');
+    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders);
+    if (processedPhotos && processedPhotos.length) {
+      return allPhotos.filter((p: any) => !processedPhotos.includes(p.path));
+    }
+    return allPhotos;
   });
 
   // Handle getting file size (check both original location and _delete folder)
@@ -118,27 +140,57 @@ function setupIpcHandlers() {
 
   // Handle photo processing
   ipcMain.handle('process-photos', async (event, { selectedPhotos, photosToDelete }) => {
-    try {
-      for (const photo of photosToDelete) {
-        const photoPath = photo.path;
-        // Get the root folder (where the photos were selected from)
+    const results: Array<{ fromPath: string; toPath: string; status: 'moved' | 'skipped' | 'error'; reason?: string }> = [];
+    for (const photo of photosToDelete || []) {
+      try {
+        const photoPath: string = photo.path;
         const rootDir = path.dirname(photoPath);
         const deleteFolder = path.join(rootDir, '_delete');
         const fileName = path.basename(photoPath);
-        const newPath = path.join(deleteFolder, fileName);
 
-        // Create _delete folder if it doesn't exist
         if (!fs.existsSync(deleteFolder)) {
           fs.mkdirSync(deleteFolder);
         }
 
-        // Only move the file if it exists and isn't already in the _delete folder
-        if (fs.existsSync(photoPath) && !photoPath.includes('_delete')) {
-          fs.renameSync(photoPath, newPath);
+        if (!fs.existsSync(photoPath)) {
+          results.push({ fromPath: photoPath, toPath: path.join(deleteFolder, fileName), status: 'skipped', reason: 'source-missing' });
+          continue;
         }
+
+        if (photoPath.includes(`${path.sep}_delete${path.sep}`)) {
+          results.push({ fromPath: photoPath, toPath: photoPath, status: 'skipped', reason: 'already-in-delete' });
+          continue;
+        }
+
+        const uniqueTargetPath = ensureUniquePath(deleteFolder, fileName);
+        try {
+          fs.renameSync(photoPath, uniqueTargetPath);
+          results.push({ fromPath: photoPath, toPath: uniqueTargetPath, status: 'moved' });
+        } catch (moveErr: any) {
+          results.push({ fromPath: photoPath, toPath: uniqueTargetPath, status: 'error', reason: String(moveErr?.message || moveErr) });
+        }
+      } catch (error: any) {
+        results.push({ fromPath: (photo as any)?.path ?? 'unknown', toPath: 'unknown', status: 'error', reason: String(error?.message || error) });
+      }
+    }
+    return results;
+  });
+
+  // Handle restoring a moved photo from _delete back to original path (for undo)
+  ipcMain.handle('restore-photo', async (event, payload: { photo: any; fromPath: string; toPath: string }) => {
+    try {
+      const { fromPath, toPath } = payload;
+      // If the toPath exists (in _delete) and original fromPath does not, move back
+      if (fs.existsSync(toPath) && !fs.existsSync(fromPath)) {
+        // Ensure parent directory exists
+        const parent = path.dirname(fromPath);
+        if (!fs.existsSync(parent)) {
+          fs.mkdirSync(parent, { recursive: true });
+        }
+        fs.renameSync(toPath, fromPath);
       }
     } catch (error) {
-      console.error('Error processing photos:', error);
+      console.error('Error restoring photo:', error);
       throw error;
     }
   });

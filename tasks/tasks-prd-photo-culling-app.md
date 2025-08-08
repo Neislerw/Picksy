@@ -65,3 +65,23 @@
   - [ ] 7.1 Write tests for imageBatcher utility
   - [ ] 7.2 Write tests for saveState module
   - [ ] 7.3 Write tests for UI components
+
+- [ ] 8.0 Add Thumbnail Strip Culling Mode (single-row thumbnails with keyboard-driven delete)
+  - [x] 8.1 Start screen integration
+    - [x] Add mode selector to choose between Tournament Mode and Thumbnail Strip Mode after folder selection
+    - [x] Wire navigation in `src/renderer/App.tsx` to launch the chosen mode
+  - [ ] 8.2 Implement `ThumbnailStripCuller` component
+    - [x] Render one long horizontal row of large thumbnails with virtualization/lazy loading
+    - [x] Keyboard controls: Left/Right to move selection; Space to mark/move selected photo to `_delete` folder; Z to undo last move
+    - [x] Visual highlight for the currently selected thumbnail; show filename and index (e.g., 123/2048)
+  - [ ] 8.3 Safe delete via main process
+    - [x] Create `_delete` folder inside the selected directory if missing
+    - [x] Move files (not copy) via IPC to `src/main.ts`; handle name collisions (append suffix) and errors
+  - [ ] 8.4 Performance
+    - [x] Prefetch adjacent thumbnails; avoid loading full-resolution images; test with very large folders
+  - [ ] 8.5 Persist and resume (mode-specific)
+    - [ ] Save last selected index and deleted list to skip already moved files on reload
+    - [x] Prompt on entering Thumbnail mode if save state exists: offer to skip Tournament-mode processed photos
+  - [ ] 8.6 Tests
+    - [ ] Unit tests for keyboard handling and selection in `ThumbnailStripCuller`
+    - [ ] IPC/file move tests with mocked `fs` to verify `_delete` behavior and collision handling

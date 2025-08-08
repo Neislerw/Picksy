@@ -9,16 +9,20 @@ interface Settings {
   includeSubfolders: boolean;
   supportedExtensions: string[];
   autoSaveInterval: number; // in minutes
+  sortingMode?: 'dateTaken' | 'dateCreated' | 'filename';
 }
 
+type CullingMode = 'tournament' | 'thumbnail';
+
 interface BatchSelectorProps {
-  onFolderSelect: (folderPath: string, includeSubfolders: boolean, settings: Settings) => void;
+  onFolderSelect: (folderPath: string, includeSubfolders: boolean, settings: Settings, mode: CullingMode) => void;
   isLoading?: boolean;
 }
 
 const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading = false }) => {
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [mode, setMode] = useState<CullingMode>('tournament');
   
   // Default settings
   const [settings, setSettings] = useState<Settings>({
@@ -27,7 +31,8 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
     maxBatchSize: 20,
     includeSubfolders: true,
     supportedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'],
-    autoSaveInterval: 0 // Auto-save after each selection (not interval-based)
+    autoSaveInterval: 0, // Auto-save after each selection (not interval-based)
+    sortingMode: 'dateTaken'
   });
 
   const handleFolderSelect = async () => {
@@ -37,7 +42,7 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
       const folderPath = await window.electron?.ipcRenderer?.invoke('select-folder');
       if (folderPath) {
         setSelectedPath(folderPath);
-        onFolderSelect(folderPath, settings.includeSubfolders, settings);
+        onFolderSelect(folderPath, settings.includeSubfolders, settings, mode);
       }
     } catch (error) {
       console.error('Error selecting folder:', error);
@@ -50,7 +55,7 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
 
   const handleProcessFolder = () => {
     if (selectedPath) {
-      onFolderSelect(selectedPath, settings.includeSubfolders, settings);
+      onFolderSelect(selectedPath, settings.includeSubfolders, settings, mode);
     }
   };
 
@@ -90,6 +95,29 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
         </div>
         
         <div className="options">
+          <div className="mode-selector">
+            <span className="mode-selector__label">Mode:</span>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="culling-mode"
+                value="tournament"
+                checked={mode === 'tournament'}
+                onChange={() => setMode('tournament')}
+              />
+              <span>Tournament</span>
+            </label>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="culling-mode"
+                value="thumbnail"
+                checked={mode === 'thumbnail'}
+                onChange={() => setMode('thumbnail')}
+              />
+              <span>Thumbnail Strip</span>
+            </label>
+          </div>
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="settings-toggle"
@@ -103,6 +131,21 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
             <h3>Batch Settings</h3>
             
             <div className="settings-grid">
+              <div className="setting-group">
+                <label className="setting-label">
+                  Sorting Mode:
+                  <select
+                    className="setting-input"
+                    value={settings.sortingMode}
+                    onChange={(e) => setSettings(prev => ({ ...prev, sortingMode: e.target.value as any }))}
+                  >
+                    <option value="dateTaken">Date Taken</option>
+                    <option value="dateCreated">Date Created</option>
+                    <option value="filename">Filename</option>
+                  </select>
+                </label>
+                <span className="setting-help">Choose how photos are ordered and batched</span>
+              </div>
               <div className="setting-group">
                 <label className="setting-label">
                   Batch Time Window (seconds):

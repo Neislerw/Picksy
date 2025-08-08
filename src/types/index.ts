@@ -3,6 +3,7 @@ export interface Photo {
   path: string;
   filename: string;
   timestamp: Date;
+  timestampSource?: 'exif' | 'filename' | 'created';
   selected?: boolean;
   toDelete?: boolean;
 }
