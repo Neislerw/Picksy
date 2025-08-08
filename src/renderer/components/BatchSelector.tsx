@@ -29,7 +29,7 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
     batchTimeWindow: 30, // 30 seconds
     minBatchSize: 2,
     maxBatchSize: 20,
-    includeSubfolders: true,
+    includeSubfolders: false,
     supportedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'],
     autoSaveInterval: 0, // Auto-save after each selection (not interval-based)
     sortingMode: 'dateTaken'
@@ -118,6 +118,15 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
               <span>Thumbnail Strip</span>
             </label>
           </div>
+          <label className="checkbox-option" style={{ marginLeft: 16 }}>
+            <input
+              type="checkbox"
+              checked={settings.includeSubfolders}
+              onChange={(e) => setSettings(prev => ({ ...prev, includeSubfolders: e.target.checked }))}
+            />
+            <span>Include subfolders</span>
+          </label>
+
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="settings-toggle"
@@ -208,16 +217,7 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
                 <span className="setting-help">Comma-separated list of file extensions to process</span>
               </div>
               
-              <div className="setting-group setting-group--full-width">
-                <label className="checkbox-option">
-                  <input
-                    type="checkbox"
-                    checked={settings.includeSubfolders}
-                    onChange={(e) => setSettings(prev => ({ ...prev, includeSubfolders: e.target.checked }))}
-                  />
-                  <span>Include subfolders</span>
-                </label>
-              </div>
+              {/* Include subfolders moved outside */}
             </div>
           </div>
         )}

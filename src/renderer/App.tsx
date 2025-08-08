@@ -269,6 +269,38 @@ const App: React.FC = () => {
     showResumePrompt
   });
 
+  // Safety net: if in tournament mode and all photos across all batches are processed, show completion
+  React.useEffect(() => {
+    if (selectedMode !== 'tournament' || showCompletionPopup || batches.length === 0 || !saveState) return;
+    const allPaths = new Set<string>();
+    for (const b of batches) {
+      for (const p of b.photos) allPaths.add(p.path);
+    }
+    const processedCount = saveState.processedPhotos.filter(p => allPaths.has(p)).length;
+    if (processedCount >= allPaths.size && allPaths.size > 0) {
+      (async () => {
+        const totalPhotos = allPaths.size;
+        let keptPhotos = 0;
+        let deletedPhotos = 0;
+        for (const path of saveState.processedPhotos) {
+          if (!allPaths.has(path)) continue;
+          if (saveState.selections[path] === 'kept') keptPhotos++;
+          else if (saveState.selections[path] === 'discarded') deletedPhotos++;
+        }
+        let deletedSize = 0;
+        const deletedPaths = saveState.processedPhotos.filter(path => allPaths.has(path) && saveState.selections[path] === 'discarded');
+        for (const path of deletedPaths) {
+          try {
+            const size = await window.electron?.ipcRenderer.invoke('get-file-size', path);
+            deletedSize += size || 0;
+          } catch {}
+        }
+        setCompletionStats({ totalPhotos, totalBatches: batches.length, keptPhotos, deletedPhotos, deletedSize });
+        setShowCompletionPopup(true);
+      })();
+    }
+  }, [selectedMode, showCompletionPopup, batches, saveState]);
+
   // Show resume prompt if save state exists
   if (showResumePrompt) {
     return (

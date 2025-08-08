@@ -28,7 +28,7 @@
   background: #1a1a1a;
   border: 2px solid transparent;
   padding: 8px;
-  min-width: 340px;
+  min-width: 440px;
 }
 
 .thumb--selected {
@@ -38,8 +38,8 @@
 
 .thumb__img {
   display: block;
-  width: 320px;
-  height: 320px;
+  width: 420px;
+  height: 420px;
   object-fit: cover;
   border-radius: 6px;
   background: #222;
@@ -52,8 +52,8 @@
 .thumb--moved .thumb__meta { opacity: 0.5; }
 
 .thumb__placeholder {
-  width: 320px;
-  height: 320px;
+  width: 420px;
+  height: 420px;
   border-radius: 6px;
   background: linear-gradient(90deg, #202020 25%, #252525 37%, #202020 63%);
   background-size: 400% 100%;
@@ -74,7 +74,7 @@
 }
 
 .thumb__name {
-  max-width: 280px;
+  max-width: 380px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
