@@ -24,6 +24,8 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
   const [selectedPhotos, setSelectedPhotos] = useState<Photo[]>([]);
   const [currentPairIndex, setCurrentPairIndex] = useState(0);
   const [batchCompleted, setBatchCompleted] = useState(false);
+  const [seenPhotoIds, setSeenPhotoIds] = useState<Set<string>>(new Set());
+  const [keptPhotoIds, setKeptPhotoIds] = useState<Set<string>>(new Set());
   
   // Initialize remaining photos when batch changes
   useEffect(() => {
@@ -33,6 +35,8 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
     setSelectedPhotos([]);
     setPhotosToDelete([]);
     setBatchCompleted(false);
+    setSeenPhotoIds(new Set());
+    setKeptPhotoIds(new Set());
   }, [batch]);
 
   // Check if batch is complete
@@ -62,6 +66,18 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
     return [remainingPhotos[startIndex], remainingPhotos[startIndex + 1]];
   };
 
+  // Mark currently displayed pair as seen when it appears
+  useEffect(() => {
+    const currentPair = getCurrentPair();
+    if (!currentPair) return;
+    setSeenPhotoIds(prev => {
+      const next = new Set(prev);
+      next.add(currentPair[0].id);
+      next.add(currentPair[1].id);
+      return next;
+    });
+  }, [currentPairIndex, remainingPhotos]);
+
   // Handle photo selection
   const handleSelection = useCallback((action: SelectionAction) => {
     const currentPair = getCurrentPair();
@@ -88,6 +104,15 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
         photosToKeep = [];
         photosToRemove = [leftPhoto, rightPhoto];
         break;
+    }
+
+    // Update kept set
+    if (photosToKeep.length > 0) {
+      setKeptPhotoIds(prev => {
+        const next = new Set(prev);
+        photosToKeep.forEach(p => next.add(p.id));
+        return next;
+      });
     }
 
     // Update the remaining photos pool
@@ -141,6 +166,12 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
       onSelection(newSelectedPhotos, photosToDelete);
       onBatchComplete();
       return newSelectedPhotos;
+    });
+    // Mark all remaining as kept
+    setKeptPhotoIds(prev => {
+      const next = new Set(prev);
+      remainingPhotos.forEach(p => next.add(p.id));
+      return next;
     });
     // Clear the remaining photos pool
     setRemainingPhotos([]);
@@ -249,6 +280,16 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
 
   const currentPair = getCurrentPair();
   const remainingCount = remainingPhotos.length;
+  const totalPhotos = batch.photos.length;
+  const seenCount = seenPhotoIds.size;
+  const allRemainingSeen = remainingPhotos.every(photo => seenPhotoIds.has(photo.id));
+  const deletedCount = photosToDelete.length;
+  const keptCount = keptPhotoIds.size; // unique kept at least once
+  const seenOnlyCount = Array.from(seenPhotoIds).filter(
+    id => !keptPhotoIds.has(id) && !photosToDelete.some(p => p.id === id)
+  ).length;
+  const unseenCount = Math.max(0, totalPhotos - (deletedCount + keptCount + seenOnlyCount));
+  const allRemainingPassed = remainingPhotos.every(photo => keptPhotoIds.has(photo.id));
   
   console.log('PhotoPairViewer render', { 
     batchId: batch.id, 
@@ -275,18 +316,36 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
       <div className="photo-pair-viewer__header">
         <h2>Batch {currentBatchIndex + 1}/{totalBatches}</h2>
         <div className="batch-progress">
-          <div className="progress-bar">
-            <div 
-              className="progress-fill" 
-              style={{ 
-                width: `${((batch.photos.length - remainingCount) / batch.photos.length) * 100}%` 
-              }}
+          <div className="progress-bar progress-bar--stacked">
+            {/* Red: deleted */}
+            <div
+              className="progress-segment progress-segment--red"
+              style={{ width: `${(deletedCount / totalPhotos) * 100}%`, left: '0%' }}
+            />
+            {/* Yellow: seen-only */}
+            <div
+              className="progress-segment progress-segment--yellow"
+              style={{ width: `${(seenOnlyCount / totalPhotos) * 100}%`, left: `${(deletedCount / totalPhotos) * 100}%` }}
+            />
+            {/* Green: kept (passed) */}
+            <div
+              className="progress-segment progress-segment--green"
+              style={{ width: `${(keptCount / totalPhotos) * 100}%`, left: `${((deletedCount + seenOnlyCount) / totalPhotos) * 100}%` }}
             />
           </div>
-          <span className="progress-text">
-            {batch.photos.length - remainingCount} of {batch.photos.length} photos processed
-          </span>
+          <div className="progress-legend">
+            <span className="legend-item"><span className="legend-dot legend-dot--red" /> Deleted {deletedCount}</span>
+            <span className="legend-item"><span className="legend-dot legend-dot--yellow" /> Seen {seenCount}</span>
+            <span className="legend-item"><span className="legend-dot legend-dot--green" /> Passed {keptCount}</span>
+            <span className="legend-item"><span className="legend-dot legend-dot--gray" /> Unseen {unseenCount}</span>
+          </div>
         </div>
+
+        {allRemainingPassed && remainingCount > 0 && (
+          <div className="progress-text" style={{ marginTop: 6, color: '#a0e3a8' }}>
+            All remaining photos have been seen. Press Enter to keep all remaining.
+          </div>
+        )}
 
       </div>
 

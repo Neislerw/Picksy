@@ -6,6 +6,7 @@ interface ThumbnailStripCullerProps {
   folderPath: string;
   photos: Photo[];
   onExit: () => void;
+  onComplete?: () => void;
 }
 
 type Action = 'moveToDelete' | 'undo';
@@ -16,7 +17,7 @@ interface MovedRecord {
   toPath: string;
 }
 
-const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath, photos, onExit }) => {
+const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath, photos, onExit, onComplete }) => {
   const [index, setIndex] = useState<number>(0);
   const [movedStack, setMovedStack] = useState<MovedRecord[]>([]);
   const [movedPaths, setMovedPaths] = useState<Set<string>>(new Set());
@@ -127,6 +128,10 @@ const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath,
         } else {
           void handleMoveToDelete(current);
           setIndex(prev => Math.min(photos.length - 1, prev + 1));
+        }
+        // If we have processed every photo (moved or skipped), trigger completion
+        if (index >= photos.length - 1 && onComplete) {
+          onComplete();
         }
         break;
       }

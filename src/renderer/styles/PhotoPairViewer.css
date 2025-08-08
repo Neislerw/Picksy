@@ -42,6 +42,49 @@
   transition: width 0.3s ease;
 }
 
+.progress-bar--stacked {
+  position: relative;
+}
+
+.progress-segment {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.progress-segment--red { background-color: #e74c3c; }
+.progress-segment--yellow { background-color: #f1c40f; }
+.progress-segment--green { background-color: #2ecc71; }
+
+.progress-legend {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #cccccc;
+  font-size: 0.85rem;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot--red { background: #e74c3c; }
+.legend-dot--yellow { background: #f1c40f; }
+.legend-dot--green { background: #2ecc71; }
+.legend-dot--gray { background: #e9ecef; }
+
 .progress-text {
   font-size: 0.9rem;
   color: #cccccc;

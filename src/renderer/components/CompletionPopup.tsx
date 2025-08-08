@@ -12,9 +12,12 @@ interface CompletionStats {
 interface CompletionPopupProps {
   stats: CompletionStats;
   onClose: () => void;
+  title?: string;
+  extraActionLabel?: string;
+  onExtraActionClick?: () => void;
 }
 
-const CompletionPopup: React.FC<CompletionPopupProps> = ({ stats, onClose }) => {
+const CompletionPopup: React.FC<CompletionPopupProps> = ({ stats, onClose, title, extraActionLabel, onExtraActionClick }) => {
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -27,7 +30,7 @@ const CompletionPopup: React.FC<CompletionPopupProps> = ({ stats, onClose }) => 
     <div className="completion-popup-overlay">
       <div className="completion-popup">
         <div className="completion-popup__header">
-          <h2>🎉 All Batches Processed!</h2>
+          <h2>🎉 {title || 'All Batches Processed!'}</h2>
           <p>Your photo culling session is complete</p>
         </div>
         
@@ -55,6 +58,11 @@ const CompletionPopup: React.FC<CompletionPopupProps> = ({ stats, onClose }) => 
         </div>
         
         <div className="completion-popup__actions">
+          {extraActionLabel && onExtraActionClick && (
+            <button onClick={onExtraActionClick} className="completion-popup__button" style={{ marginRight: 8 }}>
+              {extraActionLabel}
+            </button>
+          )}
           <button onClick={onClose} className="completion-popup__button">
             Start New Session
           </button>

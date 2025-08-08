@@ -24,6 +24,8 @@ const App: React.FC = () => {
   const [selectedMode, setSelectedMode] = useState<'tournament' | 'thumbnail'>('tournament');
   const [showSkipProcessedPrompt, setShowSkipProcessedPrompt] = useState(false);
   const [flatPhotos, setFlatPhotos] = useState<Photo[]>([]);
+  const [includeSubfoldersSelected, setIncludeSubfoldersSelected] = useState<boolean>(true);
+  const [thumbnailSessionComplete, setThumbnailSessionComplete] = useState<boolean>(false);
 
   const handleFolderSelect = async (
     folderPath: string,
@@ -35,6 +37,7 @@ const App: React.FC = () => {
     try {
       setSelectedMode(mode);
       setSelectedFolderPath(folderPath);
+      setIncludeSubfoldersSelected(includeSubfolders);
       // Check if save state exists
       const hasSaveState = await window.electron?.ipcRenderer.invoke('save-state-exists', folderPath);
       
@@ -75,7 +78,7 @@ const App: React.FC = () => {
     // Skip processed photos from the save state
     if (saveState) {
       // For thumbnail mode, we need a flat photo list filtered by processed
-      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, true, saveState.processedPhotos);
+      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, includeSubfoldersSelected, saveState.processedPhotos);
       setFlatPhotos(photos || []);
       setShowSkipProcessedPrompt(false);
     }
@@ -84,7 +87,7 @@ const App: React.FC = () => {
   const handleSkipProcessedNo = async () => {
     // Include all photos regardless of previous processing
     if (saveState) {
-      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, true, []);
+      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, includeSubfoldersSelected, []);
       setFlatPhotos(photos || []);
       setShowSkipProcessedPrompt(false);
     }
@@ -127,7 +130,7 @@ const App: React.FC = () => {
 
   const handleResume = async () => {
     if (saveState) {
-      await startProcessing(saveState.folderPath, true, saveState.processedPhotos);
+      await startProcessing(saveState.folderPath, includeSubfoldersSelected, saveState.processedPhotos);
       setShowResumePrompt(false);
     }
   };
@@ -142,7 +145,7 @@ const App: React.FC = () => {
       }
       
       // Start fresh
-      await startProcessing(saveState.folderPath, true);
+      await startProcessing(saveState.folderPath, includeSubfoldersSelected);
       setSaveState(null);
       setShowResumePrompt(false);
     }
@@ -308,7 +311,7 @@ const App: React.FC = () => {
     );
   }
 
-  const shouldShowThumbnail = selectedMode === 'thumbnail' && flatPhotos.length > 0;
+  const shouldShowThumbnail = selectedMode === 'thumbnail' && flatPhotos.length > 0 && !thumbnailSessionComplete;
 
   return (
     <div className="app">
@@ -323,6 +326,7 @@ const App: React.FC = () => {
             setCurrentBatchIndex(-1);
             setSaveState(null);
           }}
+          onComplete={() => setThumbnailSessionComplete(true)}
         />
       ) : currentBatchIndex !== -1 && currentBatch && selectedMode === 'tournament' ? (
         <PhotoPairViewer
@@ -343,6 +347,36 @@ const App: React.FC = () => {
         <CompletionPopup
           stats={completionStats}
           onClose={handleCompletionClose}
+          extraActionLabel={selectedMode === 'tournament' ? 'Open in Thumbnail Mode (Skip Processed)' : undefined}
+          onExtraActionClick={selectedMode === 'tournament' ? async () => {
+            // Switch to thumbnail mode and load photos skipping processed
+            setSelectedMode('thumbnail');
+            const folderPath = saveState?.folderPath || selectedFolderPath;
+            const processed = saveState?.processedPhotos || [];
+            const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfoldersSelected, processed);
+            setFlatPhotos(photos || []);
+            setShowCompletionPopup(false);
+          } : undefined}
+        />
+      )}
+
+      {selectedMode === 'thumbnail' && thumbnailSessionComplete && (
+        <CompletionPopup
+          stats={{
+            totalPhotos: flatPhotos.length,
+            totalBatches: 1,
+            keptPhotos: flatPhotos.length - 0, // kept is whatever not deleted; we are not tracking per save here
+            deletedPhotos: 0,
+            deletedSize: 0
+          }}
+          title={'Thumbnail Session Complete!'}
+          onClose={() => {
+            setThumbnailSessionComplete(false);
+            setFlatPhotos([]);
+            setBatches([]);
+            setCurrentBatchIndex(-1);
+            setSaveState(null);
+          }}
         />
       )}
     </div>
