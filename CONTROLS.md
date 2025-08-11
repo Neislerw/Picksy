@@ -9,7 +9,7 @@
 - **Down Arrow**: Move both photos to delete folder
 
 ### Letter Keys
-- **Z**: Undo
+- **Z**: Undo the last completed action (restores moved photos and reopens that batch)
 
 ### Special Keys
 - **Enter**: Keep all remaining photos

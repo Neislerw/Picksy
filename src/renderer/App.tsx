@@ -6,6 +6,13 @@ import CompletionPopup from './components/CompletionPopup';
 import { Photo, PhotoBatch, SaveState } from '../types';
 import './styles/App.css';
 
+interface UndoEntry {
+  batchIndex: number;
+  selectedPhotos: Photo[];
+  photosToDelete: Photo[];
+  moveResults: Array<{ fromPath: string; toPath: string; status: 'moved' | 'skipped' | 'error'; reason?: string }>; 
+}
+
 const App: React.FC = () => {
   const [batches, setBatches] = useState<PhotoBatch[]>([]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState<number>(-1);
@@ -26,6 +33,8 @@ const App: React.FC = () => {
   const [flatPhotos, setFlatPhotos] = useState<Photo[]>([]);
   const [includeSubfoldersSelected, setIncludeSubfoldersSelected] = useState<boolean>(true);
   const [thumbnailSessionComplete, setThumbnailSessionComplete] = useState<boolean>(false);
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [isUndoing, setIsUndoing] = useState<boolean>(false);
 
   const handleFolderSelect = async (
     folderPath: string,
@@ -187,11 +196,22 @@ const App: React.FC = () => {
 
     // Handle the selected photos (keep them in place) and move others to delete folder
     try {
-      const results = await window.electron?.ipcRenderer.invoke('process-photos', {
+      const results: Array<{ fromPath: string; toPath: string; status: 'moved' | 'skipped' | 'error'; reason?: string }> | undefined = await window.electron?.ipcRenderer.invoke('process-photos', {
         selectedPhotos,
         photosToDelete
       });
-      console.log('process-photos results:', results);
+      console.log('[UNDO] process-photos results count:', results?.length || 0);
+      // Push to undo stack so we can restore across batches
+      setUndoStack(prev => [
+        ...prev,
+        {
+          batchIndex: currentBatchIndex,
+          selectedPhotos,
+          photosToDelete,
+          moveResults: results || []
+        }
+      ]);
+      console.log('[UNDO] Pushed undo entry. Stack size now:', (undoStack.length + 1));
     } catch (err) {
       console.error('process-photos failed:', err);
     }
@@ -259,6 +279,80 @@ const App: React.FC = () => {
       setShowCompletionPopup(true);
     }
   }, [currentBatchIndex, batches.length, saveState]);
+
+  // Global undo (Ctrl+Z / Cmd+Z): restore last completed batch action
+  const handleGlobalUndo = useCallback(async () => {
+    if (isUndoing) return;
+    setIsUndoing(true);
+    console.log('[UNDO] Global undo invoked. Stack size:', undoStack.length);
+    if (!undoStack.length || !saveState) {
+      console.warn('[UNDO] Nothing to undo or missing saveState');
+      setIsUndoing(false);
+      return;
+    }
+    const last = undoStack[undoStack.length - 1];
+    console.log('[UNDO] Last entry:', {
+      batchIndex: last.batchIndex,
+      selectedCount: last.selectedPhotos.length,
+      deleteCount: last.photosToDelete.length,
+      moveResults: last.moveResults?.length || 0
+    });
+
+    // 1) Restore moved files from _delete
+    for (const r of last.moveResults) {
+      if (r.status === 'moved') {
+        try {
+          await window.electron?.ipcRenderer.invoke('restore-photo', { photo: null, fromPath: r.fromPath, toPath: r.toPath });
+          console.log('[UNDO] Restored', r.toPath, '->', r.fromPath);
+        } catch (e) {
+          console.warn('Failed to restore during undo:', r.fromPath, e);
+        }
+      }
+    }
+
+    // 2) Revert save state entries for this batch (both kept and deleted)
+    const pathsToRevert = new Set<string>([...last.selectedPhotos.map(p => p.path), ...last.photosToDelete.map(p => p.path)]);
+    const newProcessed = (saveState.processedPhotos || []).filter(p => !pathsToRevert.has(p));
+    const newSelections = { ...saveState.selections } as Record<string, 'kept' | 'discarded'>;
+    for (const p of pathsToRevert) {
+      delete newSelections[p];
+    }
+    const reverted: SaveState = { ...saveState, processedPhotos: newProcessed, selections: newSelections };
+
+    try {
+      await window.electron?.ipcRenderer.invoke('save-save-state', reverted);
+      setSaveState(reverted);
+      console.log('[UNDO] Save state reverted for', pathsToRevert.size, 'paths');
+    } catch (e) {
+      console.error('Failed to persist reverted save state:', e);
+    }
+
+    // 3) Navigate back to the undone batch so the user can redo it
+    setCurrentBatchIndex(last.batchIndex);
+    if (showCompletionPopup) {
+      setShowCompletionPopup(false);
+      setCompletionStats(null);
+    }
+
+    // 4) Pop from undo stack
+    setUndoStack(prev => prev.slice(0, -1));
+    console.log('[UNDO] Popped undo entry. New stack size:', Math.max(0, undoStack.length - 1));
+    setIsUndoing(false);
+  }, [undoStack, saveState, showCompletionPopup, isUndoing]);
+
+  // Global keybinding fallback: Z triggers undo regardless of which child is mounted
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey && e.code === 'KeyZ' && selectedMode === 'tournament') {
+        e.preventDefault();
+        void handleGlobalUndo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleGlobalUndo, selectedMode]);
+
+  // Note: Z key for undo is handled inside PhotoPairViewer and routed here via onUndoLastAction
 
   const currentBatch = batches[currentBatchIndex];
   
@@ -367,6 +461,7 @@ const App: React.FC = () => {
           totalBatches={batches.length}
           onSelection={handlePhotoSelection}
           onBatchComplete={handleBatchComplete}
+          onUndoLastAction={handleGlobalUndo}
         />
       ) : (
         <BatchSelector 

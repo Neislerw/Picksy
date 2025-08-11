@@ -8,6 +8,7 @@ interface PhotoPairViewerProps {
   totalBatches: number;
   onSelection: (selectedPhotos: Photo[], photosToDelete: Photo[]) => void;
   onBatchComplete: () => void;
+  onUndoLastAction?: () => void;
 }
 
 type SelectionAction = 'left' | 'right' | 'both' | 'neither';
@@ -17,7 +18,8 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
   currentBatchIndex,
   totalBatches,
   onSelection, 
-  onBatchComplete 
+  onBatchComplete,
+  onUndoLastAction
 }) => {
   const [remainingPhotos, setRemainingPhotos] = useState<Photo[]>(batch.photos);
   const [photosToDelete, setPhotosToDelete] = useState<Photo[]>([]);
@@ -26,6 +28,8 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
   const [batchCompleted, setBatchCompleted] = useState(false);
   const [seenPhotoIds, setSeenPhotoIds] = useState<Set<string>>(new Set());
   const [keptPhotoIds, setKeptPhotoIds] = useState<Set<string>>(new Set());
+  const [hasSeenAllOnce, setHasSeenAllOnce] = useState<boolean>(false);
+  const [rePassedPhotoIds, setRePassedPhotoIds] = useState<Set<string>>(new Set());
   
   // Initialize remaining photos when batch changes
   useEffect(() => {
@@ -37,6 +41,8 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
     setBatchCompleted(false);
     setSeenPhotoIds(new Set());
     setKeptPhotoIds(new Set());
+    setHasSeenAllOnce(false);
+    setRePassedPhotoIds(new Set());
   }, [batch]);
 
   // Check if batch is complete
@@ -78,6 +84,14 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
     });
   }, [currentPairIndex, remainingPhotos]);
 
+  // Track when all photos have been seen at least once
+  useEffect(() => {
+    const totalPhotos = batch.photos.length;
+    if (!hasSeenAllOnce && seenPhotoIds.size >= totalPhotos && totalPhotos > 0) {
+      setHasSeenAllOnce(true);
+    }
+  }, [seenPhotoIds, batch.photos.length, hasSeenAllOnce]);
+
   // Handle photo selection
   const handleSelection = useCallback((action: SelectionAction) => {
     const currentPair = getCurrentPair();
@@ -113,6 +127,13 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
         photosToKeep.forEach(p => next.add(p.id));
         return next;
       });
+      if (hasSeenAllOnce) {
+        setRePassedPhotoIds(prev => {
+          const next = new Set(prev);
+          photosToKeep.forEach(p => next.add(p.id));
+          return next;
+        });
+      }
     }
 
     // Update the remaining photos pool
@@ -173,6 +194,13 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
       remainingPhotos.forEach(p => next.add(p.id));
       return next;
     });
+    if (hasSeenAllOnce) {
+      setRePassedPhotoIds(prev => {
+        const next = new Set(prev);
+        remainingPhotos.forEach(p => next.add(p.id));
+        return next;
+      });
+    }
     // Clear the remaining photos pool
     setRemainingPhotos([]);
   }, [remainingPhotos, photosToDelete, onSelection, onBatchComplete]);
@@ -260,8 +288,9 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
         handleMoveAllRemaining();
         break;
       case 'z':
-        console.log('Z key pressed - undo');
-        handleUndo();
+        if (onUndoLastAction) {
+          onUndoLastAction();
+        }
         break;
       default:
         console.log('Unhandled key:', event.key, 'code:', event.code);
@@ -290,6 +319,7 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
   ).length;
   const unseenCount = Math.max(0, totalPhotos - (deletedCount + keptCount + seenOnlyCount));
   const allRemainingPassed = remainingPhotos.every(photo => keptPhotoIds.has(photo.id));
+  const rePassedCount = hasSeenAllOnce ? rePassedPhotoIds.size : 0;
   
   console.log('PhotoPairViewer render', { 
     batchId: batch.id, 
@@ -327,16 +357,26 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
               className="progress-segment progress-segment--yellow"
               style={{ width: `${(seenOnlyCount / totalPhotos) * 100}%`, left: `${(deletedCount / totalPhotos) * 100}%` }}
             />
-            {/* Green: kept (passed) */}
+            {/* Dark Green: kept (passed at least once) */}
             <div
-              className="progress-segment progress-segment--green"
+              className="progress-segment progress-segment--green-dark"
               style={{ width: `${(keptCount / totalPhotos) * 100}%`, left: `${((deletedCount + seenOnlyCount) / totalPhotos) * 100}%` }}
             />
+            {/* Neon Green: re-passed after all seen */}
+            {hasSeenAllOnce && (
+              <div
+                className="progress-segment progress-segment--green-neon"
+                style={{ width: `${(rePassedCount / totalPhotos) * 100}%`, left: `${((deletedCount + seenOnlyCount) / totalPhotos) * 100}%` }}
+              />
+            )}
           </div>
           <div className="progress-legend">
             <span className="legend-item"><span className="legend-dot legend-dot--red" /> Deleted {deletedCount}</span>
             <span className="legend-item"><span className="legend-dot legend-dot--yellow" /> Seen {seenCount}</span>
-            <span className="legend-item"><span className="legend-dot legend-dot--green" /> Passed {keptCount}</span>
+            <span className="legend-item"><span className="legend-dot legend-dot--green-dark" /> Passed {keptCount}</span>
+            {hasSeenAllOnce && (
+              <span className="legend-item"><span className="legend-dot legend-dot--green-neon" /> Re-passed {rePassedCount}</span>
+            )}
             <span className="legend-item"><span className="legend-dot legend-dot--gray" /> Unseen {unseenCount}</span>
           </div>
         </div>

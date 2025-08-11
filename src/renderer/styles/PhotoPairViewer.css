@@ -58,7 +58,8 @@
 
 .progress-segment--red { background-color: #e74c3c; }
 .progress-segment--yellow { background-color: #f1c40f; }
-.progress-segment--green { background-color: #2ecc71; }
+.progress-segment--green-dark { background-color: #1f8f55; }
+.progress-segment--green-neon { background-color: #2eff88; }
 
 .progress-legend {
   display: flex;
@@ -85,7 +86,8 @@
 
 .legend-dot--red { background: #e74c3c; }
 .legend-dot--yellow { background: #f1c40f; }
-.legend-dot--green { background: #2ecc71; }
+.legend-dot--green-dark { background: #1f8f55; }
+.legend-dot--green-neon { background: #2eff88; }
 .legend-dot--gray { background: #e9ecef; }
 
 .progress-text {
