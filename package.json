@@ -57,16 +57,22 @@
     },
     "files": [
       "dist/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "resources/**/*"
     ],
+    "icon": "resources/logo.png",
     "mac": {
-      "category": "public.app-category.photography"
+      "category": "public.app-category.photography",
+      "icon": "resources/logo.png"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "resources/logo.ico",
+      "signAndEditExecutable": false
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "resources/logo.png"
     }
   }
 }

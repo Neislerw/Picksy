@@ -2,8 +2,9 @@ import React, { useState, useCallback } from 'react';
 import BatchSelector from './components/BatchSelector';
 import PhotoPairViewer from './components/PhotoPairViewer';
 import ThumbnailStripCuller from './components/ThumbnailStripCuller';
+import VideoMode from './components/VideoMode';
 import CompletionPopup from './components/CompletionPopup';
-import { Photo, PhotoBatch, SaveState } from '../types';
+import { Photo, PhotoBatch, SaveState, Video } from '../types';
 import './styles/App.css';
 
 interface UndoEntry {
@@ -22,17 +23,18 @@ const App: React.FC = () => {
   const [selectedFolderPath, setSelectedFolderPath] = useState<string>('');
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [completionStats, setCompletionStats] = useState<{
-    totalPhotos: number;
-    totalBatches: number;
-    keptPhotos: number;
-    deletedPhotos: number;
-    deletedSize: number;
+    totalPhotosProcessed: number;
+    photosDeleted: number;
+    videosProcessed: number;
+    totalSpaceSaved: number;
   } | null>(null);
-  const [selectedMode, setSelectedMode] = useState<'tournament' | 'thumbnail'>('tournament');
+  const [selectedMode, setSelectedMode] = useState<'tournament' | 'thumbnail' | 'video'>('tournament');
   const [showSkipProcessedPrompt, setShowSkipProcessedPrompt] = useState(false);
   const [flatPhotos, setFlatPhotos] = useState<Photo[]>([]);
+  const [flatVideos, setFlatVideos] = useState<Video[]>([]);
   const [includeSubfoldersSelected, setIncludeSubfoldersSelected] = useState<boolean>(true);
   const [thumbnailSessionComplete, setThumbnailSessionComplete] = useState<boolean>(false);
+  const [videoSessionComplete, setVideoSessionComplete] = useState<boolean>(false);
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [isUndoing, setIsUndoing] = useState<boolean>(false);
 
@@ -40,7 +42,7 @@ const App: React.FC = () => {
     folderPath: string,
     includeSubfolders: boolean,
     settings: any,
-    mode: 'tournament' | 'thumbnail'
+    mode: 'tournament' | 'thumbnail' | 'video'
   ) => {
     setIsLoading(true);
     try {
@@ -54,8 +56,8 @@ const App: React.FC = () => {
         // Load existing save state and show resume prompt
         const existingSaveState = await window.electron?.ipcRenderer.invoke('load-save-state', folderPath);
         setSaveState(existingSaveState);
-        if (mode === 'thumbnail') {
-          // For thumbnail mode, ask whether to skip processed photos instead of resume
+        if (mode === 'thumbnail' || mode === 'video') {
+          // For thumbnail/video modes, ask whether to skip processed items instead of resume
           setShowSkipProcessedPrompt(true);
         } else {
           setShowResumePrompt(true);
@@ -65,6 +67,9 @@ const App: React.FC = () => {
         if (mode === 'thumbnail') {
           const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
           setFlatPhotos(photos || []);
+        } else if (mode === 'video') {
+          const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', folderPath, includeSubfolders, []);
+          setFlatVideos(videos || []);
         } else {
           await startProcessing(folderPath, includeSubfolders, [], settings);
         }
@@ -75,6 +80,9 @@ const App: React.FC = () => {
       if (mode === 'thumbnail') {
         const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
         setFlatPhotos(photos || []);
+      } else if (mode === 'video') {
+        const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', folderPath, includeSubfolders, []);
+        setFlatVideos(videos || []);
       } else {
         await startProcessing(folderPath, includeSubfolders, [], settings);
       }
@@ -86,9 +94,13 @@ const App: React.FC = () => {
   const handleSkipProcessedYes = async () => {
     // Skip processed photos from the save state
     if (saveState) {
-      // For thumbnail mode, we need a flat photo list filtered by processed
+      if (selectedMode === 'thumbnail') {
       const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, includeSubfoldersSelected, saveState.processedPhotos);
       setFlatPhotos(photos || []);
+      } else if (selectedMode === 'video') {
+        const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', saveState.folderPath, includeSubfoldersSelected, saveState.processedPhotos);
+        setFlatVideos(videos || []);
+      }
       setShowSkipProcessedPrompt(false);
     }
   };
@@ -96,8 +108,13 @@ const App: React.FC = () => {
   const handleSkipProcessedNo = async () => {
     // Include all photos regardless of previous processing
     if (saveState) {
+      if (selectedMode === 'thumbnail') {
       const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, includeSubfoldersSelected, []);
       setFlatPhotos(photos || []);
+      } else if (selectedMode === 'video') {
+        const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', saveState.folderPath, includeSubfoldersSelected, []);
+        setFlatVideos(videos || []);
+      }
       setShowSkipProcessedPrompt(false);
     }
   };
@@ -225,55 +242,42 @@ const App: React.FC = () => {
       setCurrentBatchIndex(prev => prev + 1);
     } else {
       console.log('All batches complete, calculating stats');
-      // All batches are complete - calculate stats
       const totalPhotos = batches.reduce((sum, batch) => sum + batch.photos.length, 0);
       
-      // Count kept and deleted photos from save state
+      // Derive cumulative delete stats across folder (_delete) and estimate per-session kept
       let keptPhotos = 0;
-      let deletedPhotos = 0;
       if (saveState) {
         for (const path of saveState.processedPhotos) {
-          if (saveState.selections[path] === 'kept') {
-            keptPhotos++;
-          } else if (saveState.selections[path] === 'discarded') {
-            deletedPhotos++;
-          }
+          if (saveState.selections[path] === 'kept') keptPhotos++;
         }
       }
-      
-      // Calculate deleted file sizes
-      let deletedSize = 0;
+      const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
+      // Compute requested four fields
+      const imagesDeleted = detailed?.imageCount ?? 0;
+      const videosDeleted = detailed?.videoCount ?? 0;
+      // Estimate processed kept: count kept photos in saveState among images (heuristic: paths with image extensions)
+      const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'];
+      const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.mpg', '.mpeg'];
+      const getExt = (p: string) => p.slice(p.lastIndexOf('.')).toLowerCase();
+      let keptImages = 0;
+      let keptVideos = 0;
       if (saveState) {
-        const deletedPaths = saveState.processedPhotos.filter(path => 
-          saveState.selections[path] === 'discarded'
-        );
-        for (const path of deletedPaths) {
-          try {
-            const size = await window.electron?.ipcRenderer.invoke('get-file-size', path);
-            deletedSize += size || 0;
-          } catch (error) {
-            console.error('Error getting file size for:', path, error);
+        for (const p of saveState.processedPhotos) {
+          if (saveState.selections[p] === 'kept') {
+            const ext = getExt(p);
+            if (imageExts.includes(ext)) keptImages++;
+            else if (videoExts.includes(ext)) keptVideos++;
           }
         }
       }
-      
       const stats = {
-        totalPhotos,
-        totalBatches: batches.length,
-        keptPhotos,
-        deletedPhotos,
-        deletedSize
+        totalPhotosProcessed: keptImages + imagesDeleted,
+        photosDeleted: imagesDeleted,
+        videosProcessed: keptVideos + videosDeleted,
+        totalSpaceSaved: detailed?.bytes ?? 0
       };
       
-      console.log('Completion stats:', {
-        totalPhotos,
-        totalBatches: batches.length,
-        keptPhotos,
-        deletedPhotos,
-        deletedSize,
-        saveStateProcessedCount: saveState?.processedPhotos.length || 0,
-        saveStateSelections: saveState?.selections || {}
-      });
+      console.log('Completion stats:', stats);
       
       setCompletionStats(stats);
       setShowCompletionPopup(true);
@@ -389,7 +393,37 @@ const App: React.FC = () => {
             deletedSize += size || 0;
           } catch {}
         }
-        setCompletionStats({ totalPhotos, totalBatches: batches.length, keptPhotos, deletedPhotos, deletedSize });
+        // Convert to new stats shape using detailed delete stats
+        try {
+          const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
+          const imagesDeleted = detailed?.imageCount ?? 0;
+          const videosDeleted = detailed?.videoCount ?? 0;
+          const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'];
+          const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.mpg', '.mpeg'];
+          const getExt = (p: string) => p.slice(p.lastIndexOf('.')).toLowerCase();
+          let keptImages2 = 0;
+          let keptVideos2 = 0;
+          for (const p of saveState.processedPhotos) {
+            if (!allPaths.has(p)) continue;
+            if (saveState.selections[p] !== 'kept') continue;
+            const ext = getExt(p);
+            if (imageExts.includes(ext)) keptImages2++;
+            else if (videoExts.includes(ext)) keptVideos2++;
+          }
+          setCompletionStats({
+            totalPhotosProcessed: keptImages2 + imagesDeleted,
+            photosDeleted: imagesDeleted,
+            videosProcessed: keptVideos2 + videosDeleted,
+            totalSpaceSaved: detailed?.bytes ?? 0
+          });
+        } catch {
+          setCompletionStats({
+            totalPhotosProcessed: keptPhotos + 0,
+            photosDeleted: 0,
+            videosProcessed: 0,
+            totalSpaceSaved: 0
+          });
+        }
         setShowCompletionPopup(true);
       })();
     }
@@ -438,6 +472,7 @@ const App: React.FC = () => {
   }
 
   const shouldShowThumbnail = selectedMode === 'thumbnail' && flatPhotos.length > 0 && !thumbnailSessionComplete;
+  const shouldShowVideo = selectedMode === 'video' && flatVideos.length > 0 && !videoSessionComplete;
 
   return (
     <div className="app">
@@ -445,14 +480,119 @@ const App: React.FC = () => {
         <ThumbnailStripCuller 
           folderPath={selectedFolderPath} 
           photos={flatPhotos} 
-          onExit={() => {
-            // Clear thumbnail state and go back to start
-            setFlatPhotos([]);
-            setBatches([]);
-            setCurrentBatchIndex(-1);
-            setSaveState(null);
+          onExit={async () => {
+            try {
+              const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
+              // For thumbnail mode, focus on photos
+              setCompletionStats({
+                totalPhotosProcessed: (detailed?.imageCount ?? 0), // we don't track kept here; leave as deleted-only for now
+                photosDeleted: (detailed?.imageCount ?? 0),
+                videosProcessed: (detailed?.videoCount ?? 0),
+                totalSpaceSaved: detailed?.bytes ?? 0
+              });
+              setShowCompletionPopup(true);
+            } catch (e) {
+              console.warn('Failed to compute thumbnail stats on save & quit:', e);
+            }
           }}
-          onComplete={() => setThumbnailSessionComplete(true)}
+          onComplete={async () => {
+            try {
+              const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
+              setCompletionStats({
+                totalPhotosProcessed: (detailed?.imageCount ?? 0),
+                photosDeleted: (detailed?.imageCount ?? 0),
+                videosProcessed: (detailed?.videoCount ?? 0),
+                totalSpaceSaved: detailed?.bytes ?? 0
+              });
+              setShowCompletionPopup(true);
+            } catch (e) {
+              console.warn('Failed to compute thumbnail stats on complete:', e);
+            }
+          }}
+        />
+      ) : shouldShowVideo ? (
+        <VideoMode 
+          folderPath={selectedFolderPath} 
+          videos={flatVideos} 
+          selections={saveState?.selections || {}}
+          initialSortBy={(window as any).lastSettings?.video?.sortBy}
+          initialSortOrder={(window as any).lastSettings?.video?.sortOrder}
+          scrubForwardSeconds={(window as any).lastSettings?.video?.scrubForwardSeconds}
+          scrubBackwardSeconds={(window as any).lastSettings?.video?.scrubBackwardSeconds}
+          dateSource={(window as any).lastSettings?.video?.dateSource}
+          onExit={async () => {
+            // Compute stats based on current list and save state selections + delete sizes
+            try {
+              const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
+              const imagesDeleted = detailed?.imageCount ?? 0;
+              const videosDeleted = detailed?.videoCount ?? 0;
+              const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'];
+              const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.mpg', '.mpeg'];
+              const getExt = (p: string) => p.slice(p.lastIndexOf('.')).toLowerCase();
+              let keptImages = 0;
+              let keptVideos = 0;
+              if (saveState) {
+                for (const p of saveState.processedPhotos) {
+                  if (saveState.selections[p] === 'kept') {
+                    const ext = getExt(p);
+                    if (imageExts.includes(ext)) keptImages++;
+                    else if (videoExts.includes(ext)) keptVideos++;
+                  }
+                }
+              }
+              setCompletionStats({
+                totalPhotosProcessed: keptImages + imagesDeleted,
+                photosDeleted: imagesDeleted,
+                videosProcessed: keptVideos + videosDeleted,
+                totalSpaceSaved: detailed?.bytes ?? 0
+              });
+              setShowCompletionPopup(true);
+            } catch (e) {
+              console.warn('Failed to compute video stats on save & quit:', e);
+            }
+          }}
+          onComplete={() => setVideoSessionComplete(true)}
+          onKeep={async (video) => {
+            if (!saveState) return;
+            const updated = { ...saveState };
+            if (!updated.processedPhotos.includes(video.path)) {
+              updated.processedPhotos.push(video.path);
+            }
+            updated.selections[video.path] = 'kept';
+            try {
+              await window.electron?.ipcRenderer.invoke('save-save-state', updated);
+              setSaveState(updated);
+            } catch (e) {
+              console.error('Failed to persist video keep:', e);
+            }
+          }}
+          onDelete={async (video) => {
+            if (!saveState) return;
+            const updated = { ...saveState };
+            if (!updated.processedPhotos.includes(video.path)) {
+              updated.processedPhotos.push(video.path);
+            }
+            updated.selections[video.path] = 'discarded';
+            try {
+              await window.electron?.ipcRenderer.invoke('save-save-state', updated);
+              setSaveState(updated);
+            } catch (e) {
+              console.error('Failed to persist video delete:', e);
+            }
+          }}
+          onRestore={async (video) => {
+            if (!saveState) return;
+            const updated = { ...saveState };
+            // Remove selection entry for this path and remove from processed list
+            delete updated.selections[video.path];
+            updated.processedPhotos = (updated.processedPhotos || []).filter(p => p !== video.path);
+            try {
+              await window.electron?.ipcRenderer.invoke('save-save-state', updated);
+              setSaveState(updated);
+            } catch (e) {
+              console.error('Failed to persist video restore:', e);
+            }
+          }}
         />
       ) : currentBatchIndex !== -1 && currentBatch && selectedMode === 'tournament' ? (
         <PhotoPairViewer
@@ -487,25 +627,9 @@ const App: React.FC = () => {
         />
       )}
 
-      {selectedMode === 'thumbnail' && thumbnailSessionComplete && (
-        <CompletionPopup
-          stats={{
-            totalPhotos: flatPhotos.length,
-            totalBatches: 1,
-            keptPhotos: flatPhotos.length - 0, // kept is whatever not deleted; we are not tracking per save here
-            deletedPhotos: 0,
-            deletedSize: 0
-          }}
-          title={'Thumbnail Session Complete!'}
-          onClose={() => {
-            setThumbnailSessionComplete(false);
-            setFlatPhotos([]);
-            setBatches([]);
-            setCurrentBatchIndex(-1);
-            setSaveState(null);
-          }}
-        />
-      )}
+      {selectedMode === 'thumbnail' && thumbnailSessionComplete && null}
+
+      {selectedMode === 'video' && videoSessionComplete && null}
     </div>
   );
 };

@@ -2,11 +2,10 @@ import React from 'react';
 import '../styles/CompletionPopup.css';
 
 interface CompletionStats {
-  totalPhotos: number;
-  totalBatches: number;
-  keptPhotos: number;
-  deletedPhotos: number;
-  deletedSize: number;
+  totalPhotosProcessed: number; // images kept across sessions + images in _delete
+  photosDeleted: number;        // images in _delete
+  videosProcessed: number;      // videos kept across sessions + videos in _delete
+  totalSpaceSaved: number;      // bytes in _delete
 }
 
 interface CompletionPopupProps {
@@ -36,24 +35,20 @@ const CompletionPopup: React.FC<CompletionPopupProps> = ({ stats, onClose, title
         
         <div className="completion-popup__stats">
           <div className="stat-item">
-            <span className="stat-label">Total Photos:</span>
-            <span className="stat-value">{stats.totalPhotos}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Total Batches:</span>
-            <span className="stat-value">{stats.totalBatches}</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-label">Photos Kept:</span>
-            <span className="stat-value stat-value--kept">{stats.keptPhotos}</span>
+            <span className="stat-label">Total Photos Processed:</span>
+            <span className="stat-value">{stats.totalPhotosProcessed}</span>
           </div>
           <div className="stat-item">
             <span className="stat-label">Photos Deleted:</span>
-            <span className="stat-value stat-value--deleted">{stats.deletedPhotos}</span>
+            <span className="stat-value stat-value--deleted">{stats.photosDeleted}</span>
           </div>
           <div className="stat-item">
-            <span className="stat-label">Space Saved:</span>
-            <span className="stat-value stat-value--saved">{formatFileSize(stats.deletedSize)}</span>
+            <span className="stat-label">Videos Processed:</span>
+            <span className="stat-value">{stats.videosProcessed}</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Total Space Saved:</span>
+            <span className="stat-value stat-value--saved">{formatFileSize(stats.totalSpaceSaved)}</span>
           </div>
         </div>
         

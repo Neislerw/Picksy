@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Photo, PhotoBatch } from '../../types';
 import '../styles/PhotoPairViewer.css';
+import Keycap from './Keycap';
 
 interface PhotoPairViewerProps {
   batch: PhotoBatch;
@@ -345,6 +346,13 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
     <div className="photo-pair-viewer">
       <div className="photo-pair-viewer__header">
         <h2>Batch {currentBatchIndex + 1}/{totalBatches}</h2>
+        <div className="progress-legend" style={{ marginBottom: 8 }}>
+          <span className="legend-item">Select: <Keycap>↑</Keycap>=Keep both, <Keycap>↓</Keycap>=Delete both</span>
+          <span className="legend-item">Pick Left/Right: <Keycap>←</Keycap>/<Keycap>→</Keycap></span>
+          <span className="legend-item">Keep All: <Keycap>Enter</Keycap></span>
+          <span className="legend-item">Delete All: <Keycap>Space</Keycap></span>
+          <span className="legend-item">Undo: <Keycap>Z</Keycap></span>
+        </div>
         <div className="batch-progress">
           <div className="progress-bar progress-bar--stacked">
             {/* Red: deleted */}

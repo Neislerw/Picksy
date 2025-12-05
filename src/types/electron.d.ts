@@ -12,3 +12,10 @@ declare global {
     };
   }
 }
+
+export interface ScanProgressUpdate {
+  stage: string;
+  current: number;
+  total: number;
+  path?: string;
+}

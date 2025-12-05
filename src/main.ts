@@ -101,18 +101,56 @@ function setupIpcHandlers() {
     const minBatchSize = settings?.minBatchSize || 2;
     const maxBatchSize = settings?.maxBatchSize || 20;
     const sortingMode = settings?.sortingMode || 'dateTaken';
-    
-    return await scanFolderAndCreateBatches(folderPath, timeWindow, minBatchSize, maxBatchSize, includeSubfolders, processedPhotos, sortingMode);
+
+    const webContents = (event?.sender);
+    const sendProgress = (update: { stage: string; current: number; total: number; path?: string }) => {
+      try {
+        webContents?.send('scan-progress', update);
+      } catch {}
+    };
+
+    return await scanFolderAndCreateBatches(
+      folderPath,
+      timeWindow,
+      minBatchSize,
+      maxBatchSize,
+      includeSubfolders,
+      processedPhotos,
+      sortingMode,
+      sendProgress
+    );
   });
 
   // Flat scan for photos (no batching) with optional processed filtering
   ipcMain.handle('scan-folder-photos', async (event, folderPath: string, includeSubfolders: boolean = true, processedPhotos: string[] = []) => {
     const { scanFolderForImages } = require('./utils/imageBatcher');
-    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders);
+    const webContents = (event?.sender);
+    const sendProgress = (update: { stage: string; current: number; total: number; path?: string }) => {
+      try {
+        webContents?.send('scan-progress', update);
+      } catch {}
+    };
+    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders, 'dateTaken', sendProgress);
     if (processedPhotos && processedPhotos.length) {
       return allPhotos.filter((p: any) => !processedPhotos.includes(p.path));
     }
     return allPhotos;
+  });
+
+  // Flat scan for videos (no batching) with optional processed filtering
+  ipcMain.handle('scan-folder-videos', async (event, folderPath: string, includeSubfolders: boolean = true, processedVideos: string[] = []) => {
+    const { scanFolderForVideos } = require('./utils/videoBatcher');
+    const webContents = (event?.sender);
+    const sendProgress = (update: { stage: string; current: number; total: number; path?: string }) => {
+      try {
+        webContents?.send('scan-progress', update);
+      } catch {}
+    };
+    const allVideos = await scanFolderForVideos(folderPath, includeSubfolders, sendProgress);
+    if (processedVideos && processedVideos.length) {
+      return allVideos.filter((v: any) => !processedVideos.includes(v.path));
+    }
+    return allVideos;
   });
 
   // Handle getting file size (check both original location and _delete folder)
@@ -136,6 +174,101 @@ function setupIpcHandlers() {
         return 0;
       }
     }
+  });
+
+  // Compute stats for all files currently in any '_delete' folder under the given root
+  ipcMain.handle('get-delete-stats', async (event, folderPath: string) => {
+    async function walk(dir: string): Promise<{ count: number; bytes: number }> {
+      let totalCount = 0;
+      let totalBytes = 0;
+      try {
+        const entries = await fs.promises.readdir(dir);
+        for (const entry of entries) {
+          const full = path.join(dir, entry);
+          const st = await fs.promises.stat(full);
+          if (st.isDirectory()) {
+            if (entry === '_delete') {
+              // Sum all files recursively under this _delete folder
+              const stack: string[] = [full];
+              while (stack.length) {
+                const d = stack.pop() as string;
+                const items = await fs.promises.readdir(d);
+                for (const it of items) {
+                  const p = path.join(d, it);
+                  const s = await fs.promises.stat(p);
+                  if (s.isDirectory()) stack.push(p);
+                  else if (s.isFile()) {
+                    totalCount += 1;
+                    totalBytes += s.size;
+                  }
+                }
+              }
+            } else {
+              const sub = await walk(full);
+              totalCount += sub.count;
+              totalBytes += sub.bytes;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Error walking for delete stats:', dir, e);
+      }
+      return { count: totalCount, bytes: totalBytes };
+    }
+
+    return await walk(folderPath);
+  });
+
+  // Detailed delete stats separating images and videos
+  ipcMain.handle('get-delete-stats-detailed', async (event, folderPath: string) => {
+    let imageCount = 0;
+    let videoCount = 0;
+    let bytes = 0;
+    try {
+      const { isImageFile } = require('./utils/imageBatcher');
+      const { isVideoFile } = require('./utils/videoBatcher');
+
+      const stack: string[] = [folderPath];
+      while (stack.length) {
+        const dir = stack.pop() as string;
+        let entries: string[] = [];
+        try {
+          entries = await fs.promises.readdir(dir);
+        } catch { continue; }
+        for (const entry of entries) {
+          const full = path.join(dir, entry);
+          let st: fs.Stats;
+          try { st = await fs.promises.stat(full); } catch { continue; }
+          if (st.isDirectory()) {
+            if (entry === '_delete') {
+              // walk this _delete directory fully
+              const s2: string[] = [full];
+              while (s2.length) {
+                const d = s2.pop() as string;
+                let items: string[] = [];
+                try { items = await fs.promises.readdir(d); } catch { continue; }
+                for (const it of items) {
+                  const p = path.join(d, it);
+                  let s: fs.Stats;
+                  try { s = await fs.promises.stat(p); } catch { continue; }
+                  if (s.isDirectory()) s2.push(p);
+                  else if (s.isFile()) {
+                    bytes += s.size;
+                    if (isImageFile(it)) imageCount += 1;
+                    else if (isVideoFile(it)) videoCount += 1;
+                  }
+                }
+              }
+            } else {
+              stack.push(full);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('get-delete-stats-detailed failed:', e);
+    }
+    return { imageCount, videoCount, bytes };
   });
 
   // Handle photo processing

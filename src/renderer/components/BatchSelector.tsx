@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/BatchSelector.css';
 import logoImage from '../../../resources/logo.png';
 
@@ -10,9 +10,16 @@ interface Settings {
   supportedExtensions: string[];
   autoSaveInterval: number; // in minutes
   sortingMode?: 'dateTaken' | 'dateCreated' | 'filename';
+  video?: {
+    scrubForwardSeconds: number;
+    scrubBackwardSeconds: number;
+    sortBy: 'date' | 'size' | 'filename' | 'duration';
+    sortOrder: 'asc' | 'desc';
+    dateSource: 'filename' | 'created';
+  };
 }
 
-type CullingMode = 'tournament' | 'thumbnail';
+type CullingMode = 'tournament' | 'thumbnail' | 'video';
 
 interface BatchSelectorProps {
   onFolderSelect: (folderPath: string, includeSubfolders: boolean, settings: Settings, mode: CullingMode) => void;
@@ -23,6 +30,7 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [mode, setMode] = useState<CullingMode>('tournament');
+  const [progress, setProgress] = useState<{ stage: string; current: number; total: number } | null>(null);
   
   // Default settings
   const [settings, setSettings] = useState<Settings>({
@@ -32,17 +40,36 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
     includeSubfolders: false,
     supportedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'],
     autoSaveInterval: 0, // Auto-save after each selection (not interval-based)
-    sortingMode: 'dateTaken'
+    sortingMode: 'dateTaken',
+    video: {
+      scrubForwardSeconds: 5,
+      scrubBackwardSeconds: 3,
+      sortBy: 'date',
+      sortOrder: 'asc',
+      dateSource: 'filename'
+    }
   });
+
+  useEffect(() => {
+    const handler = (update: { stage: string; current: number; total: number }) => {
+      setProgress(update);
+    };
+    window.electron?.ipcRenderer.on('scan-progress', handler);
+    return () => {
+      window.electron?.ipcRenderer.removeListener('scan-progress', handler as any);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading) setProgress(null);
+  }, [isLoading]);
 
   const handleFolderSelect = async () => {
     try {
-      // In a real implementation, this would use Electron's dialog API
-      // For now, we'll simulate folder selection
       const folderPath = await window.electron?.ipcRenderer?.invoke('select-folder');
       if (folderPath) {
         setSelectedPath(folderPath);
-        onFolderSelect(folderPath, settings.includeSubfolders, settings, mode);
+        // Do not auto-process; require explicit Process click
       }
     } catch (error) {
       console.error('Error selecting folder:', error);
@@ -55,9 +82,13 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
 
   const handleProcessFolder = () => {
     if (selectedPath) {
+      // Expose settings for App to pass down to VideoMode as initial props
+      (window as any).lastSettings = settings;
       onFolderSelect(selectedPath, settings.includeSubfolders, settings, mode);
     }
   };
+
+  const pct = progress && progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0;
 
   return (
     <div className="batch-selector">
@@ -83,16 +114,26 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
           >
             Browse
           </button>
-          {selectedPath && (
+          {selectedPath && !isLoading && (
             <button
               onClick={handleProcessFolder}
-              disabled={isLoading}
               className="folder-input__button folder-input__button--primary"
             >
-              {isLoading ? 'Processing...' : 'Process Folder'}
+              Process Folder
             </button>
           )}
         </div>
+        
+        {isLoading && (
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ height: 8, background: '#444', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: '#27ae60', transition: 'width 0.2s ease' }} />
+            </div>
+            <div style={{ color: '#cccccc', marginTop: 6, fontSize: 12 }}>
+              {progress ? `${progress.stage} ${pct}% (${progress.current}/${progress.total})` : 'Preparing...'}
+            </div>
+          </div>
+        )}
         
         <div className="options">
           <div className="mode-selector">
@@ -117,6 +158,16 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
               />
               <span>Thumbnail Strip</span>
             </label>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="culling-mode"
+                value="video"
+                checked={mode === 'video'}
+                onChange={() => setMode('video')}
+              />
+              <span>Video Mode</span>
+            </label>
           </div>
           <label className="checkbox-option" style={{ marginLeft: 16 }}>
             <input
@@ -137,7 +188,7 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
         
         {showSettings && (
           <div className="settings-panel">
-            <h3>Batch Settings</h3>
+            <h3>Tournament Settings</h3>
             
             <div className="settings-grid">
               <div className="setting-group">
@@ -218,6 +269,108 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
               </div>
               
               {/* Include subfolders moved outside */}
+            </div>
+            <h3 style={{ marginTop: 16 }}>Thumbnail Settings</h3>
+            <div className="settings-grid">
+              <div className="setting-group">
+                <span className="setting-help">No extra settings yet</span>
+              </div>
+            </div>
+
+            <h3 style={{ marginTop: 16 }}>Video Settings</h3>
+            <div className="settings-grid">
+              <div className="setting-group">
+                <label className="setting-label">
+                  Scrub Forward (seconds):
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={settings.video?.scrubForwardSeconds ?? 5}
+                    onChange={(e) => setSettings(prev => ({ ...prev, video: { ...(prev.video || { sortBy: 'date', sortOrder: 'asc', dateSource: 'filename', scrubForwardSeconds: 5, scrubBackwardSeconds: 3 }), scrubForwardSeconds: Math.max(1, parseInt(e.target.value) || 5) } }))}
+                    className="setting-input"
+                  />
+                </label>
+                <span className="setting-help">Right arrow while playing scrubs forward by this amount</span>
+              </div>
+
+              <div className="setting-group">
+                <label className="setting-label">
+                  Scrub Backward (seconds):
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={settings.video?.scrubBackwardSeconds ?? 3}
+                    onChange={(e) => setSettings(prev => ({ ...prev, video: { ...(prev.video || { sortBy: 'date', sortOrder: 'asc', dateSource: 'filename', scrubForwardSeconds: 5, scrubBackwardSeconds: 3 }), scrubBackwardSeconds: Math.max(1, parseInt(e.target.value) || 3) } }))}
+                    className="setting-input"
+                  />
+                </label>
+                <span className="setting-help">Left arrow while playing scrubs backward by this amount</span>
+              </div>
+
+              <div className="setting-group">
+                <label className="setting-label">
+                  Sort By:
+                  <select
+                    className="setting-input"
+                    value={settings.video?.sortBy ?? 'date'}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      video: {
+                        ...(prev.video || { scrubForwardSeconds: 5, scrubBackwardSeconds: 3, sortOrder: 'asc', dateSource: 'filename', sortBy: 'date' }),
+                        sortBy: e.target.value as any
+                      }
+                    }))}
+                  >
+                    <option value="date">Date</option>
+                    <option value="size">Size</option>
+                    <option value="filename">Filename</option>
+                    <option value="duration">Duration</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="setting-group">
+                <label className="setting-label">
+                  Sort Order:
+                  <select
+                    className="setting-input"
+                    value={settings.video?.sortOrder ?? 'asc'}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      video: {
+                        ...(prev.video || { scrubForwardSeconds: 5, scrubBackwardSeconds: 3, sortBy: 'date', dateSource: 'filename', sortOrder: 'asc' }),
+                        sortOrder: e.target.value as any
+                      }
+                    }))}
+                  >
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="setting-group">
+                <label className="setting-label">
+                  Date Source:
+                  <select
+                    className="setting-input"
+                    value={settings.video?.dateSource ?? 'filename'}
+                    onChange={(e) => setSettings(prev => ({
+                      ...prev,
+                      video: {
+                        ...(prev.video || { scrubForwardSeconds: 5, scrubBackwardSeconds: 3, sortBy: 'date', sortOrder: 'asc', dateSource: 'filename' }),
+                        dateSource: e.target.value as any
+                      }
+                    }))}
+                  >
+                    <option value="filename">Filename Timestamp</option>
+                    <option value="created">File Created</option>
+                  </select>
+                </label>
+                <span className="setting-help">If filename has no timestamp, created date is used</span>
+              </div>
             </div>
           </div>
         )}

@@ -216,7 +216,36 @@ export async function getFileStats(filePath: string): Promise<fs.Stats> {
 /**
  * Recursively scan a directory for image files
  */
-export async function scanDirectoryForImages(dirPath: string, includeSubfolders: boolean = true, sortingMode: SortingMode = 'dateTaken'): Promise<Photo[]> {
+export async function countImageFiles(dirPath: string, includeSubfolders: boolean = true): Promise<number> {
+  let count = 0;
+  try {
+    const items = await fs.promises.readdir(dirPath);
+    for (const item of items) {
+      const fullPath = path.join(dirPath, item);
+      const stats = await fs.promises.stat(fullPath);
+      if (stats.isDirectory()) {
+        if (item === '_delete') continue;
+        if (includeSubfolders) {
+          count += await countImageFiles(fullPath, includeSubfolders);
+        }
+      } else if (stats.isFile() && isImageFile(item)) {
+        count += 1;
+      }
+    }
+  } catch (error) {
+    console.error(`Error counting images in ${dirPath}:`, error);
+    throw error;
+  }
+  return count;
+}
+
+export async function scanDirectoryForImages(
+  dirPath: string,
+  includeSubfolders: boolean = true,
+  sortingMode: SortingMode = 'dateTaken',
+  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void,
+  progressCtx?: { processed: number; total: number }
+): Promise<Photo[]> {
   const photos: Photo[] = [];
   
   try {
@@ -233,7 +262,7 @@ export async function scanDirectoryForImages(dirPath: string, includeSubfolders:
         }
         // Only scan subdirectories if includeSubfolders is true
         if (includeSubfolders) {
-          const subPhotos = await scanDirectoryForImages(fullPath, includeSubfolders, sortingMode);
+          const subPhotos = await scanDirectoryForImages(fullPath, includeSubfolders, sortingMode, onProgress, progressCtx);
           photos.push(...subPhotos);
         }
       } else if (stats.isFile() && isImageFile(item)) {
@@ -255,6 +284,11 @@ export async function scanDirectoryForImages(dirPath: string, includeSubfolders:
           timestamp: timestamp,
         };
         photos.push(photo);
+        if (progressCtx && onProgress) {
+          progressCtx.processed += 1;
+          // Throttle by relying on renderer side if needed; emit each step for simplicity
+          onProgress({ stage: 'Scanning photos', current: progressCtx.processed, total: progressCtx.total, path: fullPath });
+        }
       }
     }
   } catch (error) {
@@ -388,11 +422,19 @@ export function groupPhotosIntoBatches(
 /**
  * Main function to scan a folder and return sorted image files
  */
-export async function scanFolderForImages(folderPath: string, includeSubfolders: boolean = true, sortingMode: SortingMode = 'dateTaken'): Promise<Photo[]> {
+export async function scanFolderForImages(
+  folderPath: string,
+  includeSubfolders: boolean = true,
+  sortingMode: SortingMode = 'dateTaken',
+  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void
+): Promise<Photo[]> {
   console.log(`Scanning folder: ${folderPath} (includeSubfolders: ${includeSubfolders}, sortingMode: ${sortingMode})`);
   
   try {
-    const photos = await scanDirectoryForImages(folderPath, includeSubfolders, sortingMode);
+    const total = await countImageFiles(folderPath, includeSubfolders);
+    const progressCtx = { processed: 0, total };
+    if (onProgress) onProgress({ stage: 'Preparing scan', current: 0, total });
+    const photos = await scanDirectoryForImages(folderPath, includeSubfolders, sortingMode, onProgress, progressCtx);
     let sortedPhotos: Photo[];
     if (sortingMode === 'filename') {
       sortedPhotos = [...photos].sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }));
@@ -401,6 +443,7 @@ export async function scanFolderForImages(folderPath: string, includeSubfolders:
     }
     
     console.log(`Found ${sortedPhotos.length} image files`);
+    if (onProgress) onProgress({ stage: 'Sorting photos', current: progressCtx.total, total: progressCtx.total });
     return sortedPhotos;
   } catch (error) {
     console.error('Error scanning folder for images:', error);
@@ -418,18 +461,19 @@ export async function scanFolderAndCreateBatches(
   maxBatchSize: number = DEFAULT_MAX_BATCH_SIZE,
   includeSubfolders: boolean = true,
   processedPhotos: string[] = [],
-  sortingMode: SortingMode = 'dateTaken'
+  sortingMode: SortingMode = 'dateTaken',
+  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void
 ): Promise<PhotoBatch[]> {
   console.log(`Scanning folder and creating batches: ${folderPath} (includeSubfolders: ${includeSubfolders}, sortingMode: ${sortingMode})`);
   
   try {
-    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders, sortingMode);
+    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders, sortingMode, onProgress);
     
     // Filter out already processed photos
     const unprocessedPhotos = allPhotos.filter(photo => !processedPhotos.includes(photo.path));
     
     console.log(`Found ${allPhotos.length} total photos, ${unprocessedPhotos.length} unprocessed`);
-    
+    if (onProgress) onProgress({ stage: 'Batching photos', current: unprocessedPhotos.length, total: unprocessedPhotos.length });
     const batches = groupPhotosIntoBatches(unprocessedPhotos, timeWindow, minBatchSize, maxBatchSize, sortingMode);
     
     console.log(`Created ${batches.length} batches from ${unprocessedPhotos.length} unprocessed photos`);

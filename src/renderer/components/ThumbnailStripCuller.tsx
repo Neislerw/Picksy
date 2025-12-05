@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Photo } from '../../types';
 import '../styles/ThumbnailStripCuller.css';
+import Keycap from './Keycap';
 
 interface ThumbnailStripCullerProps {
   folderPath: string;
@@ -186,7 +187,9 @@ const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath,
         <button className="thumb-strip__btn" onClick={onExit}>
           Save and Quit
         </button>
-        <div className="thumb-strip__hint">Keys: Left/Right to navigate, Space/Down to delete, Z to undo</div>
+        <div className="thumb-strip__hint">
+          Keys: <Keycap>←</Keycap>/<Keycap>→</Keycap> navigate, <Keycap>Space</Keycap>/<Keycap>↓</Keycap> delete, <Keycap>Z</Keycap> undo
+        </div>
       </div>
     </div>
   );

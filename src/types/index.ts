@@ -8,6 +8,18 @@ export interface Photo {
   toDelete?: boolean;
 }
 
+export interface Video {
+  id: string;
+  path: string;
+  filename: string;
+  timestamp: Date;
+  timestampSource?: 'metadata' | 'filename' | 'created';
+  duration?: number; // in seconds
+  fileSize: number; // in bytes
+  selected?: boolean;
+  toDelete?: boolean;
+}
+
 export interface PhotoBatch {
   id: string;
   photos: Photo[];
