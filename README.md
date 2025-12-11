@@ -88,7 +88,6 @@ npm test
 
 Picksy is licensed under the [GNU AGPLv3](LICENSE) for open source use, ensuring that any derivative works, including SaaS applications, remain open source.
 
-For commercial use without AGPLv3 obligations (e.g., proprietary products or SaaS), a commercial license is available. Contact neislerw@gmail.com for details.
 
 ## Support Picksy
 [Buy me a Coffee](https://buymeacoffee.com/neislerw) or Share with a friend!
