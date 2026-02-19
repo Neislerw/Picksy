@@ -17,18 +17,47 @@ You can 'Save and Quit' and Picksy will keep a savestate file in your folder tha
   - **Tournament Mode**: Compare two photos side-by-side and select favorites
   - **Thumbnail Mode**: View all photos in a grid and select/deselect individually
   - **Video Mode**: Review and manage video files
-- **Tournament-Style Selection**:
-  - Compare two photos side-by-side
-  - Select a favorite by clicking or using Left/Right arrow keys
-  - Keep both photos with the Up arrow
-  - Move both to delete with the Down arrow
-  - Keep all remaining photos with Enter
-  - Move all remaining to delete with Space
-  - Undo the last action with Z
 - **Post-Selection Actions**:
   - View thumbnails of non-selected photos
   - Move non-selected to a "_delete" folder or cancel to keep all photos
   - Resume previous sessions with saved state
+
+## Controls
+
+### Tournament Mode
+Compare two photos side-by-side and pick favorites.
+
+| Key | Action |
+|-----|--------|
+| ← Left | Keep left photo, move right to delete |
+| → Right | Keep right photo, move left to delete |
+| ↑ Up | Keep both photos |
+| ↓ Down | Move both photos to delete |
+| Enter | Keep all remaining photos |
+| Space | Move all remaining photos to delete |
+| Z | Undo last action |
+
+### Thumbnail Mode
+View photos in a grid and mark for delete individually.
+
+| Key | Action |
+|-----|--------|
+| ← / → | Navigate between photos |
+| Space / ↓ / ↑ | Mark current photo for delete (or restore if already marked) |
+| Z | Undo last move to delete |
+| Click | Select a thumbnail |
+
+### Video Mode
+Review and manage video files. Videos marked "Keep" are skipped when reprocessing the folder. Videos marked "Delete" move to `_delete`; "Favorite" moves to `_favorites`.
+
+| Key | Action |
+|-----|--------|
+| ← / → | Navigate between videos (or scrub when video player is focused) |
+| ↑ Up | Keep (skip on reprocess) |
+| ↓ Down | Move to `_delete` |
+| Enter | Move to `_favorites` |
+| Space | Play/pause (when video player focused) |
+| Z | Undo last delete or favorite |
 
 ## Prerequisites
 - [Node.js](https://nodejs.org/) (v18 or later recommended)
