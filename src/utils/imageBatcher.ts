@@ -224,7 +224,7 @@ export async function countImageFiles(dirPath: string, includeSubfolders: boolea
       const fullPath = path.join(dirPath, item);
       const stats = await fs.promises.stat(fullPath);
       if (stats.isDirectory()) {
-        if (item === '_delete') continue;
+        if (item === '_delete' || item === '_favorites') continue;
         if (includeSubfolders) {
           count += await countImageFiles(fullPath, includeSubfolders);
         }
@@ -256,8 +256,8 @@ export async function scanDirectoryForImages(
       const stats = await fs.promises.stat(fullPath);
       
       if (stats.isDirectory()) {
-        // Always skip _delete folders
-        if (item === '_delete') {
+        // Always skip _delete and _favorites folders
+        if (item === '_delete' || item === '_favorites') {
           continue;
         }
         // Only scan subdirectories if includeSubfolders is true

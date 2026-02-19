@@ -19,7 +19,7 @@ interface VideoModeProps {
   dateSource?: 'filename' | 'created';
 }
 
-type Action = 'moveToDelete' | 'undo';
+type Action = 'moveToDelete' | 'moveToFavorites' | 'undo';
 
 interface MovedRecord {
   video: Video;
@@ -31,6 +31,10 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
   const [index, setIndex] = useState<number>(0);
   const [movedStack, setMovedStack] = useState<MovedRecord[]>([]);
   const [movedPaths, setMovedPaths] = useState<Set<string>>(new Set());
+  const [favoritedStack, setFavoritedStack] = useState<MovedRecord[]>([]);
+  const [favoritedPaths, setFavoritedPaths] = useState<Set<string>>(new Set());
+  const [actionOrder, setActionOrder] = useState<Array<'delete' | 'favorite'>>([]);
+  const [optimisticKeptPaths, setOptimisticKeptPaths] = useState<Set<string>>(new Set());
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -38,6 +42,8 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
   const [durationMap, setDurationMap] = useState<Record<string, number>>({});
   const [sortBy, setSortBy] = useState<'date' | 'size' | 'filename' | 'duration'>(initialSortBy);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(initialSortOrder);
+  // Deferred video src so key-driven UI updates (borders, etc.) can paint before heavy video load
+  const [deferredVideoPath, setDeferredVideoPath] = useState<string | null>(null);
 
   useEffect(() => {
     setSortBy(initialSortBy);
@@ -78,6 +84,21 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
     setIndex(0);
   }, [sortBy]);
 
+  // Defer main video src so key-driven state updates (movedPaths, etc.) can paint before video load blocks main thread
+  const targetPath = displayVideos[index]?.path ?? null;
+  useEffect(() => {
+    if (targetPath == null) {
+      setDeferredVideoPath(null);
+      return;
+    }
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setDeferredVideoPath(targetPath);
+      });
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [targetPath]);
+
   const centerOnIndex = useCallback((i: number) => {
     const container = containerRef.current;
     const el = document.getElementById(`video-thumb-${i}`);
@@ -89,7 +110,8 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
   }, []);
 
   useEffect(() => {
-    centerOnIndex(index);
+    const rafId = requestAnimationFrame(() => centerOnIndex(index));
+    return () => cancelAnimationFrame(rafId);
   }, [index, centerOnIndex]);
 
   // Measure container and first thumbnail to compute leading spacer so the first item can be centered
@@ -108,22 +130,51 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
     return () => window.removeEventListener('resize', updateSpacer);
   }, [videos.length]);
 
-  const handleMoveToDelete = useCallback(async (video: Video) => {
+  const handleMoveToDelete = useCallback(async (video: Video): Promise<boolean> => {
+    const path = video?.path;
+    if (!path || typeof path !== 'string') {
+      console.warn('[VideoMode] handleMoveToDelete: missing or invalid path', video);
+      return false;
+    }
     try {
-      const res: Array<{ fromPath: string; toPath: string }> | undefined = await (window as any).electron?.ipcRenderer.invoke(
+      const res: Array<{ fromPath: string; toPath: string; status?: string; reason?: string }> | undefined = await (window as any).electron?.ipcRenderer.invoke(
         'process-photos',
-        { selectedPhotos: [], photosToDelete: [video] }
+        { selectedPhotos: [], photosToDelete: [{ path }] }
       );
-      if (res && res[0]) {
+      if (res && res.length > 0 && res[0].status === 'moved') {
         setMovedStack(prev => [...prev, { video, fromPath: res[0].fromPath, toPath: res[0].toPath }]);
-        setMovedPaths(prev => {
-          const next = new Set(prev);
-          next.add(res[0].fromPath);
-          return next;
-        });
+        setActionOrder(prev => [...prev, 'delete']);
+        return true;
       }
+      if (res && res[0]) console.warn('[VideoMode] process-photos skip/error:', res[0].status, res[0].reason);
+      return false;
     } catch (e) {
       console.error('Failed to move to _delete:', e);
+      return false;
+    }
+  }, []);
+
+  const handleMoveToFavorites = useCallback(async (video: Video): Promise<boolean> => {
+    const path = video?.path;
+    if (!path || typeof path !== 'string') {
+      console.warn('[VideoMode] handleMoveToFavorites: missing or invalid path', video);
+      return false;
+    }
+    try {
+      const res: Array<{ fromPath: string; toPath: string; status?: string; reason?: string }> | undefined = await (window as any).electron?.ipcRenderer.invoke(
+        'move-to-favorites',
+        { itemsToFavorite: [{ path }] }
+      );
+      if (res && res.length > 0 && res[0].status === 'moved') {
+        setFavoritedStack(prev => [...prev, { video, fromPath: res[0].fromPath, toPath: res[0].toPath }]);
+        setActionOrder(prev => [...prev, 'favorite']);
+        return true;
+      }
+      if (res && res[0]) console.warn('[VideoMode] move-to-favorites skip/error:', res[0].status, res[0].reason);
+      return false;
+    } catch (e) {
+      console.error('Failed to move to _favorites:', e);
+      return false;
     }
   }, []);
 
@@ -145,23 +196,49 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
   }, [movedStack]);
 
   const handleUndo = useCallback(async () => {
-    const last = movedStack[movedStack.length - 1];
-    if (!last) return;
-    try {
-      await (window as any).electron?.ipcRenderer.invoke('restore-photo', last);
-      setMovedStack(prev => prev.slice(0, -1));
-      setMovedPaths(prev => {
-        const next = new Set(prev);
-        next.delete(last.fromPath);
-        return next;
-      });
-      // Also move back to previous video for user context
-      setIndex(prev => Math.max(0, prev - 1));
-      if (onRestore) onRestore(last.video);
-    } catch (e) {
-      console.error('Failed to undo move:', e);
+    const lastType = actionOrder[actionOrder.length - 1];
+    if (!lastType) return;
+    if (lastType === 'delete') {
+      const last = movedStack[movedStack.length - 1];
+      if (!last) {
+        setActionOrder(prev => prev.slice(0, -1));
+        return;
+      }
+      try {
+        await (window as any).electron?.ipcRenderer.invoke('restore-photo', last);
+        setMovedStack(prev => prev.slice(0, -1));
+        setMovedPaths(prev => {
+          const next = new Set(prev);
+          next.delete(last.fromPath);
+          return next;
+        });
+        setActionOrder(prev => prev.slice(0, -1));
+        setIndex(prev => Math.max(0, prev - 1));
+        if (onRestore) onRestore(last.video);
+      } catch (e) {
+        console.error('Failed to undo move to _delete:', e);
+      }
+    } else {
+      const last = favoritedStack[favoritedStack.length - 1];
+      if (!last) {
+        setActionOrder(prev => prev.slice(0, -1));
+        return;
+      }
+      try {
+        await (window as any).electron?.ipcRenderer.invoke('restore-photo', last);
+        setFavoritedStack(prev => prev.slice(0, -1));
+        setFavoritedPaths(prev => {
+          const next = new Set(prev);
+          next.delete(last.fromPath);
+          return next;
+        });
+        setActionOrder(prev => prev.slice(0, -1));
+        setIndex(prev => Math.max(0, prev - 1));
+      } catch (e) {
+        console.error('Failed to undo move to _favorites:', e);
+      }
     }
-  }, [movedStack, onRestore]);
+  }, [actionOrder, movedStack, favoritedStack, onRestore]);
 
   const handlePlayPause = useCallback(() => {
     if (videoRef.current) {
@@ -223,35 +300,67 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
         }
         break;
       case 'ArrowDown': {
+        if (e.repeat) break;
         e.preventDefault();
         const current = displayVideos[index];
         if (!current) break;
-        // Move to _delete and advance; if already moved, just advance
-        if (!movedPaths.has(current.path)) {
-          void handleMoveToDelete(current);
-          if (onDelete) onDelete(current);
+        if (movedPaths.has(current.path)) {
+          setIndex(prev => Math.min(displayVideos.length - 1, prev + 1));
+          if (index >= displayVideos.length - 1 && onComplete) onComplete();
+          break;
         }
+        setMovedPaths(prev => new Set(prev).add(current.path));
         setIndex(prev => Math.min(displayVideos.length - 1, prev + 1));
-        // If we have processed every video (moved or skipped), trigger completion
-        if (index >= displayVideos.length - 1 && onComplete) {
-          onComplete();
-        }
+        if (index >= displayVideos.length - 1 && onComplete) onComplete();
+        // Defer move until React renders and releases video file handles (avoids EBUSY on Windows)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            handleMoveToDelete(current).then(ok => {
+              if (!ok) setMovedPaths(prev => { const n = new Set(prev); n.delete(current.path); return n; });
+              else if (onDelete) onDelete(current);
+            });
+          });
+        });
         break;
       }
       case 'ArrowUp': {
+        if (e.repeat) break;
         e.preventDefault();
         const current = displayVideos[index];
         if (!current) break;
-        // Keep (ensure not in _delete) and advance
         if (movedPaths.has(current.path)) {
           void handleRestoreSpecific(current);
           if (onRestore) onRestore(current);
         }
+        setOptimisticKeptPaths(prev => new Set(prev).add(current.path));
         if (onKeep) onKeep(current);
         setIndex(prev => Math.min(displayVideos.length - 1, prev + 1));
-        if (index >= displayVideos.length - 1 && onComplete) {
-          onComplete();
+        if (index >= displayVideos.length - 1 && onComplete) onComplete();
+        break;
+      }
+      case 'Enter': {
+        if (e.repeat) break;
+        const ae = document?.activeElement as HTMLElement | null;
+        if (ae?.tagName === 'SELECT' || ae?.tagName === 'BUTTON' || ae?.tagName === 'INPUT') break;
+        e.preventDefault();
+        const cur = displayVideos[index];
+        if (!cur) break;
+        if (favoritedPaths.has(cur.path)) {
+          setIndex(prev => Math.min(displayVideos.length - 1, prev + 1));
+          if (index >= displayVideos.length - 1 && onComplete) onComplete();
+          break;
         }
+        setFavoritedPaths(prev => new Set(prev).add(cur.path));
+        setIndex(prev => Math.min(displayVideos.length - 1, prev + 1));
+        if (index >= displayVideos.length - 1 && onComplete) onComplete();
+        // Defer move until React renders and releases video file handles (avoids EBUSY on Windows)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            handleMoveToFavorites(cur).then(ok => {
+              if (!ok) setFavoritedPaths(prev => { const n = new Set(prev); n.delete(cur.path); return n; });
+            });
+          });
+        });
         break;
       }
       case 'Space':
@@ -269,23 +378,29 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
         handleUndo();
         break;
     }
-  }, [displayVideos, index, handleMoveToDelete, handleRestoreSpecific, movedPaths, handleUndo, handlePlayPause, onKeep, onDelete, onRestore, onComplete]);
+  }, [displayVideos, index, handleMoveToDelete, handleMoveToFavorites, handleRestoreSpecific, movedPaths, favoritedPaths, handleUndo, handlePlayPause, onKeep, onDelete, onRestore, onComplete]);
 
   useEffect(() => {
-    window.addEventListener('keydown', onKeyDown as any);
-    return () => window.removeEventListener('keydown', onKeyDown as any);
+    const opts = { capture: true };
+    window.addEventListener('keydown', onKeyDown as any, opts);
+    return () => window.removeEventListener('keydown', onKeyDown as any, opts);
   }, [onKeyDown]);
 
   const currentVideo = displayVideos[index];
+  const mainVideoPath = deferredVideoPath ?? targetPath;
+  const mainVideoSrc = mainVideoPath && !movedPaths.has(mainVideoPath) && !favoritedPaths.has(mainVideoPath)
+    ? `file://${mainVideoPath}` : null;
 
   return (
     <div className="video-mode__wrapper">
       <div className="video-mode__main">
         {currentVideo && (
           <div className="video-mode__player">
+            {mainVideoSrc ? (
             <video
               ref={videoRef}
-              src={`file://${currentVideo.path}`}
+              src={mainVideoSrc}
+              preload="metadata"
               className="video-mode__video"
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
@@ -298,6 +413,9 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
               }}
               controls
             />
+            ) : (
+              <div className="video-mode__video video-mode__video--placeholder" />
+            )}
             <div className="video-mode__info">
               <h3 className="video-mode__filename">{currentVideo.filename}</h3>
               <div className="video-mode__metadata">
@@ -327,28 +445,34 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
               id={`video-thumb-${i}`}
               key={v.id}
               className={`video-thumb ${isSelected ? 'video-thumb--selected' : ''} ${
-                selections[v.path] === 'discarded' || movedPaths.has(v.path)
-                  ? 'video-thumb--deleted'
-                  : selections[v.path] === 'kept'
-                    ? 'video-thumb--kept'
-                    : 'video-thumb--undecided'
+                favoritedPaths.has(v.path)
+                  ? 'video-thumb--favorited'
+                  : selections[v.path] === 'discarded' || movedPaths.has(v.path)
+                    ? 'video-thumb--deleted'
+                    : optimisticKeptPaths.has(v.path) || selections[v.path] === 'kept'
+                      ? 'video-thumb--kept'
+                      : 'video-thumb--undecided'
               }`}
               onClick={() => setIndex(i)}
               tabIndex={0}
             >
               {shouldRender ? (
-                <video
-                  src={`file://${v.path}`}
-                  className="video-thumb__video"
-                  muted
-                  preload="metadata"
-                  onLoadedMetadata={(e) => {
-                    const dur = (e.currentTarget as HTMLVideoElement).duration;
-                    if (!isNaN(dur)) {
-                      setDurationMap(prev => ({ ...prev, [v.path]: dur }));
-                    }
-                  }}
-                />
+                movedPaths.has(v.path) || favoritedPaths.has(v.path) ? (
+                  <div className="video-thumb__placeholder" />
+                ) : (
+                  <video
+                    src={`file://${v.path}`}
+                    className="video-thumb__video"
+                    muted
+                    preload="metadata"
+                    onLoadedMetadata={(e) => {
+                      const dur = (e.currentTarget as HTMLVideoElement).duration;
+                      if (!isNaN(dur)) {
+                        setDurationMap(prev => ({ ...prev, [v.path]: dur }));
+                      }
+                    }}
+                  />
+                )
               ) : (
                 <div className="video-thumb__placeholder" />
               )}
@@ -390,7 +514,7 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
           </select>
         </div>
         <div className="video-mode__hint">
-          Keys: <Keycap>←</Keycap>/<Keycap>→</Keycap> navigate, <Keycap>↑</Keycap>/<Keycap>↓</Keycap> delete, <Keycap>Space</Keycap> play/pause, <Keycap>Z</Keycap> undo
+          <Keycap>←</Keycap> <Keycap>→</Keycap> navigate · <Keycap>↑</Keycap> Keep · <Keycap>↓</Keycap> Delete · <Keycap>Enter</Keycap> Favorites · <Keycap>Space</Keycap> play/pause · <Keycap>Z</Keycap> undo
         </div>
       </div>
     </div>

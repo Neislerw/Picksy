@@ -26,6 +26,25 @@ function createWindow(): void {
 
 // Set up IPC handlers
 function setupIpcHandlers() {
+  async function renameWithRetry(fromPath: string, toPath: string, maxRetries = 3, delayMs = 150): Promise<{ ok: boolean; error?: string }> {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        fs.renameSync(fromPath, toPath);
+        return { ok: true };
+      } catch (e: unknown) {
+        const err = e as NodeJS.ErrnoException;
+        const msg = err?.message ?? String(e);
+        const isEBUSY = err?.code === 'EBUSY' || msg.includes('EBUSY') || msg.includes('busy') || msg.includes('locked');
+        if (isEBUSY && i < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, delayMs));
+        } else {
+          return { ok: false, error: msg };
+        }
+      }
+    }
+    return { ok: false, error: 'EBUSY after retries' };
+  }
+
   function ensureUniquePath(targetDir: string, fileName: string): string {
     const base = path.parse(fileName).name;
     const ext = path.parse(fileName).ext;
@@ -271,45 +290,99 @@ function setupIpcHandlers() {
     return { imageCount, videoCount, bytes };
   });
 
-  // Handle photo processing
+  // Handle photo/video processing: move items to _delete (used by tournament, thumbnail, and video modes).
+  // Expects items with .path (photos and videos both have path).
   ipcMain.handle('process-photos', async (event, { selectedPhotos, photosToDelete }) => {
     const results: Array<{ fromPath: string; toPath: string; status: 'moved' | 'skipped' | 'error'; reason?: string }> = [];
-    for (const photo of photosToDelete || []) {
+    for (const item of photosToDelete || []) {
       try {
-        const photoPath: string = photo.path;
-        const rootDir = path.dirname(photoPath);
+        const itemPath: string = item.path;
+        const rootDir = path.dirname(itemPath);
         const deleteFolder = path.join(rootDir, '_delete');
-        const fileName = path.basename(photoPath);
+        const fileName = path.basename(itemPath);
 
         if (!fs.existsSync(deleteFolder)) {
           fs.mkdirSync(deleteFolder);
         }
 
-        if (!fs.existsSync(photoPath)) {
-          results.push({ fromPath: photoPath, toPath: path.join(deleteFolder, fileName), status: 'skipped', reason: 'source-missing' });
+        if (!fs.existsSync(itemPath)) {
+          const r = { fromPath: itemPath, toPath: path.join(deleteFolder, fileName), status: 'skipped' as const, reason: 'source-missing' };
+          results.push(r);
+          console.warn('[process-photos] skip source-missing:', itemPath);
           continue;
         }
 
-        if (photoPath.includes(`${path.sep}_delete${path.sep}`)) {
-          results.push({ fromPath: photoPath, toPath: photoPath, status: 'skipped', reason: 'already-in-delete' });
+        if (itemPath.includes(`${path.sep}_delete${path.sep}`)) {
+          const r = { fromPath: itemPath, toPath: itemPath, status: 'skipped' as const, reason: 'already-in-delete' };
+          results.push(r);
           continue;
         }
 
         const uniqueTargetPath = ensureUniquePath(deleteFolder, fileName);
-        try {
-          fs.renameSync(photoPath, uniqueTargetPath);
-          results.push({ fromPath: photoPath, toPath: uniqueTargetPath, status: 'moved' });
-        } catch (moveErr: any) {
-          results.push({ fromPath: photoPath, toPath: uniqueTargetPath, status: 'error', reason: String(moveErr?.message || moveErr) });
+        const { ok, error } = await renameWithRetry(itemPath, uniqueTargetPath);
+        if (ok) {
+          results.push({ fromPath: itemPath, toPath: uniqueTargetPath, status: 'moved' });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[process-photos] Moved to _delete:', itemPath, '->', uniqueTargetPath);
+          }
+        } else {
+          results.push({ fromPath: itemPath, toPath: uniqueTargetPath, status: 'error', reason: error });
+          console.warn('[process-photos] move error:', itemPath, error);
         }
       } catch (error: any) {
-        results.push({ fromPath: (photo as any)?.path ?? 'unknown', toPath: 'unknown', status: 'error', reason: String(error?.message || error) });
+        const r = { fromPath: (item as any)?.path ?? 'unknown', toPath: 'unknown', status: 'error' as const, reason: String(error?.message || error) };
+        results.push(r);
+        console.warn('[process-photos] handler error:', r.reason);
       }
     }
     return results;
   });
 
-  // Handle restoring a moved photo from _delete back to original path (for undo)
+  // Handle moving photos/videos to _favorites folder (same layout as _delete, different target)
+  ipcMain.handle('move-to-favorites', async (event, { itemsToFavorite }: { itemsToFavorite: Array<{ path: string }> }) => {
+    const results: Array<{ fromPath: string; toPath: string; status: 'moved' | 'skipped' | 'error'; reason?: string }> = [];
+    for (const item of itemsToFavorite || []) {
+      try {
+        const itemPath: string = item.path;
+        const rootDir = path.dirname(itemPath);
+        const favoritesFolder = path.join(rootDir, '_favorites');
+        const fileName = path.basename(itemPath);
+
+        if (!fs.existsSync(favoritesFolder)) {
+          fs.mkdirSync(favoritesFolder);
+        }
+
+        if (!fs.existsSync(itemPath)) {
+          results.push({ fromPath: itemPath, toPath: path.join(favoritesFolder, fileName), status: 'skipped', reason: 'source-missing' });
+          console.warn('[move-to-favorites] skip source-missing:', itemPath);
+          continue;
+        }
+
+        if (itemPath.includes(`${path.sep}_favorites${path.sep}`)) {
+          results.push({ fromPath: itemPath, toPath: itemPath, status: 'skipped', reason: 'already-in-favorites' });
+          continue;
+        }
+
+        const uniqueTargetPath = ensureUniquePath(favoritesFolder, fileName);
+        const { ok, error } = await renameWithRetry(itemPath, uniqueTargetPath);
+        if (ok) {
+          results.push({ fromPath: itemPath, toPath: uniqueTargetPath, status: 'moved' });
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[move-to-favorites] Moved to _favorites:', itemPath, '->', uniqueTargetPath);
+          }
+        } else {
+          results.push({ fromPath: itemPath, toPath: uniqueTargetPath, status: 'error', reason: error });
+          console.warn('[move-to-favorites] move error:', itemPath, error);
+        }
+      } catch (error: any) {
+        results.push({ fromPath: (item as any)?.path ?? 'unknown', toPath: 'unknown', status: 'error', reason: String(error?.message || error) });
+        console.warn('[move-to-favorites] handler error:', (error as any)?.message ?? error);
+      }
+    }
+    return results;
+  });
+
+  // Handle restoring a moved photo from _delete or _favorites back to original path (for undo)
   ipcMain.handle('restore-photo', async (event, payload: { photo: any; fromPath: string; toPath: string }) => {
     try {
       const { fromPath, toPath } = payload;

@@ -63,11 +63,25 @@ const App: React.FC = () => {
           setShowResumePrompt(true);
         }
       } else {
-        // No save state
+        // No save state – create one for thumbnail/video so Keep/Delete persist
         if (mode === 'thumbnail') {
+          const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+          try {
+            await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
+            setSaveState(newSaveState);
+          } catch (e) {
+            console.warn('Failed to create initial save state for thumbnail:', e);
+          }
           const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
           setFlatPhotos(photos || []);
         } else if (mode === 'video') {
+          const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+          try {
+            await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
+            setSaveState(newSaveState);
+          } catch (e) {
+            console.warn('Failed to create initial save state for video:', e);
+          }
           const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', folderPath, includeSubfolders, []);
           setFlatVideos(videos || []);
         } else {
@@ -76,11 +90,21 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error('Error checking save state:', error);
-      // Fallback: load something sensible for the chosen mode
+      // Fallback: create save state for thumbnail/video if needed, then load
       if (mode === 'thumbnail') {
+        const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+        try {
+          await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
+          setSaveState(newSaveState);
+        } catch (e) { /* ignore */ }
         const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
         setFlatPhotos(photos || []);
       } else if (mode === 'video') {
+        const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+        try {
+          await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
+          setSaveState(newSaveState);
+        } catch (e) { /* ignore */ }
         const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', folderPath, includeSubfolders, []);
         setFlatVideos(videos || []);
       } else {
@@ -183,6 +207,10 @@ const App: React.FC = () => {
     setBatches([]);
     setCurrentBatchIndex(-1);
     setSaveState(null);
+    setFlatPhotos([]);
+    setFlatVideos([]);
+    setThumbnailSessionComplete(false);
+    setVideoSessionComplete(false);
   };
 
   const handlePhotoSelection = async (selectedPhotos: Photo[], photosToDelete: Photo[]) => {
@@ -521,8 +549,10 @@ const App: React.FC = () => {
           scrubBackwardSeconds={(window as any).lastSettings?.video?.scrubBackwardSeconds}
           dateSource={(window as any).lastSettings?.video?.dateSource}
           onExit={async () => {
-            // Compute stats based on current list and save state selections + delete sizes
             try {
+              if (saveState) {
+                await window.electron?.ipcRenderer.invoke('save-save-state', saveState);
+              }
               const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
               const imagesDeleted = detailed?.imageCount ?? 0;
               const videosDeleted = detailed?.videoCount ?? 0;
@@ -552,46 +582,46 @@ const App: React.FC = () => {
             }
           }}
           onComplete={() => setVideoSessionComplete(true)}
-          onKeep={async (video) => {
-            if (!saveState) return;
-            const updated = { ...saveState };
-            if (!updated.processedPhotos.includes(video.path)) {
-              updated.processedPhotos.push(video.path);
-            }
-            updated.selections[video.path] = 'kept';
-            try {
-              await window.electron?.ipcRenderer.invoke('save-save-state', updated);
-              setSaveState(updated);
-            } catch (e) {
-              console.error('Failed to persist video keep:', e);
-            }
+          onKeep={(video) => {
+            setSaveState(prev => {
+              if (!prev) return prev;
+              const next = {
+                ...prev,
+                processedPhotos: prev.processedPhotos.includes(video.path)
+                  ? prev.processedPhotos
+                  : [...prev.processedPhotos, video.path],
+                selections: { ...prev.selections, [video.path]: 'kept' as const }
+              };
+              window.electron?.ipcRenderer.invoke('save-save-state', next).catch(e => console.error('Failed to persist video keep:', e));
+              return next;
+            });
           }}
-          onDelete={async (video) => {
-            if (!saveState) return;
-            const updated = { ...saveState };
-            if (!updated.processedPhotos.includes(video.path)) {
-              updated.processedPhotos.push(video.path);
-            }
-            updated.selections[video.path] = 'discarded';
-            try {
-              await window.electron?.ipcRenderer.invoke('save-save-state', updated);
-              setSaveState(updated);
-            } catch (e) {
-              console.error('Failed to persist video delete:', e);
-            }
+          onDelete={(video) => {
+            setSaveState(prev => {
+              if (!prev) return prev;
+              const next = {
+                ...prev,
+                processedPhotos: prev.processedPhotos.includes(video.path)
+                  ? prev.processedPhotos
+                  : [...prev.processedPhotos, video.path],
+                selections: { ...prev.selections, [video.path]: 'discarded' as const }
+              };
+              window.electron?.ipcRenderer.invoke('save-save-state', next).catch(e => console.error('Failed to persist video delete:', e));
+              return next;
+            });
           }}
-          onRestore={async (video) => {
-            if (!saveState) return;
-            const updated = { ...saveState };
-            // Remove selection entry for this path and remove from processed list
-            delete updated.selections[video.path];
-            updated.processedPhotos = (updated.processedPhotos || []).filter(p => p !== video.path);
-            try {
-              await window.electron?.ipcRenderer.invoke('save-save-state', updated);
-              setSaveState(updated);
-            } catch (e) {
-              console.error('Failed to persist video restore:', e);
-            }
+          onRestore={(video) => {
+            setSaveState(prev => {
+              if (!prev) return prev;
+              const { [video.path]: _, ...restSelections } = prev.selections || {};
+              const next = {
+                ...prev,
+                processedPhotos: (prev.processedPhotos || []).filter(p => p !== video.path),
+                selections: restSelections
+              };
+              window.electron?.ipcRenderer.invoke('save-save-state', next).catch(e => console.error('Failed to persist video restore:', e));
+              return next;
+            });
           }}
         />
       ) : currentBatchIndex !== -1 && currentBatch && selectedMode === 'tournament' ? (

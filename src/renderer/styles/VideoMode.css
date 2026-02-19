@@ -30,6 +30,12 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
+.video-mode__video--placeholder {
+  min-width: 320px;
+  min-height: 180px;
+  background: #333;
+}
+
 .video-mode__info {
   margin-top: 20px;
   text-align: center;
@@ -119,6 +125,11 @@
 
 .video-thumb--kept {
   border-color: #4CAF50;
+}
+
+.video-thumb--favorited {
+  border-color: #FFC107;
+  box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.4);
 }
 
 .video-thumb__video {
