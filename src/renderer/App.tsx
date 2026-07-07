@@ -4,7 +4,21 @@ import PhotoPairViewer from './components/PhotoPairViewer';
 import ThumbnailStripCuller from './components/ThumbnailStripCuller';
 import VideoMode from './components/VideoMode';
 import CompletionPopup from './components/CompletionPopup';
-import { Photo, PhotoBatch, SaveState, Video } from '../types';
+import {
+  getMediaReviewKey,
+  ImmichConnectionConfig,
+  MediaSourceType,
+  Photo,
+  PhotoBatch,
+  SaveState,
+  Video,
+} from '../types';
+import {
+  enrichPhotosWithImmich,
+  enrichVideosWithImmich,
+  setImmichSession,
+  ImmichMatchError,
+} from './utils/immichMedia';
 import './styles/App.css';
 
 interface UndoEntry {
@@ -37,78 +51,206 @@ const App: React.FC = () => {
   const [videoSessionComplete, setVideoSessionComplete] = useState<boolean>(false);
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [isUndoing, setIsUndoing] = useState<boolean>(false);
+  const [sourceType, setSourceType] = useState<MediaSourceType>('local');
+  const [immichConfig, setImmichConfig] = useState<ImmichConnectionConfig | null>(null);
+  const [scanSettings, setScanSettings] = useState<any>(null);
+  const [immichError, setImmichError] = useState<string | null>(null);
+  const [tournamentSessionComplete, setTournamentSessionComplete] = useState(false);
+
+  const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.heic', '.heif'];
+  const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.mpg', '.mpeg'];
+  const getExt = (p: string) => p.slice(p.lastIndexOf('.')).toLowerCase();
+
+  const buildSessionStatsFromSaveState = (state: SaveState | null) => {
+    let keptImages = 0;
+    let keptVideos = 0;
+    let discardedImages = 0;
+    let discardedVideos = 0;
+    if (state) {
+      for (const key of state.processedPhotos) {
+        const selection = state.selections[key];
+        if (!selection) continue;
+        const ext = key.includes('.') ? getExt(key) : '.jpg';
+        if (selection === 'kept') {
+          if (imageExts.includes(ext)) keptImages++;
+          else if (videoExts.includes(ext)) keptVideos++;
+        } else if (selection === 'discarded') {
+          if (imageExts.includes(ext)) discardedImages++;
+          else if (videoExts.includes(ext)) discardedVideos++;
+          else discardedImages++;
+        }
+      }
+    }
+    return {
+      totalPhotosProcessed: keptImages + discardedImages,
+      photosDeleted: discardedImages,
+      videosProcessed: keptVideos + discardedVideos,
+      totalSpaceSaved: 0,
+    };
+  };
+
+  const handleImmichFailure = (error: unknown) => {
+    if (error instanceof ImmichMatchError) {
+      setImmichError(error.message);
+      return true;
+    }
+    return false;
+  };
+
+  const buildInitialSaveState = (
+    folderPath: string,
+    settings: any,
+    config: ImmichConnectionConfig | null
+  ): SaveState => ({
+    version: 2,
+    sourceType: settings?.sourceType || 'local',
+    folderPath,
+    processedPhotos: [],
+    selections: {},
+    immich:
+      settings?.sourceType === 'immich-external' && config
+        ? {
+            serverUrl: config.serverUrl,
+            pathMapping: config.pathMapping,
+          }
+        : undefined,
+  });
+
+  const enrichBatchesWithImmich = async (
+    inputBatches: PhotoBatch[],
+    folderPath: string,
+    includeSubfolders: boolean,
+    config: ImmichConnectionConfig
+  ): Promise<PhotoBatch[]> => {
+    const allPhotos = inputBatches.flatMap((batch) => batch.photos);
+    const enrichedPhotos = await enrichPhotosWithImmich(allPhotos, folderPath, includeSubfolders, config);
+    const byPath = new Map(enrichedPhotos.map((photo) => [photo.path, photo]));
+    return inputBatches.map((batch) => ({
+      ...batch,
+      photos: batch.photos.map((photo) => byPath.get(photo.path) || photo),
+    }));
+  };
 
   const handleFolderSelect = async (
     folderPath: string,
     includeSubfolders: boolean,
     settings: any,
-    mode: 'tournament' | 'thumbnail' | 'video'
+    mode: 'tournament' | 'thumbnail' | 'video',
+    config: ImmichConnectionConfig | null = null
   ) => {
     setIsLoading(true);
+    setImmichError(null);
+    setTournamentSessionComplete(false);
     try {
       setSelectedMode(mode);
       setSelectedFolderPath(folderPath);
       setIncludeSubfoldersSelected(includeSubfolders);
-      // Check if save state exists
+      setScanSettings(settings);
+      setSourceType(settings?.sourceType || 'local');
+      setImmichConfig(config);
+      if (settings?.sourceType === 'immich-external' && config) {
+        await setImmichSession(config, folderPath, includeSubfolders);
+      } else {
+        await setImmichSession(null);
+      }
+
       const hasSaveState = await window.electron?.ipcRenderer.invoke('save-state-exists', folderPath);
       
       if (hasSaveState) {
-        // Load existing save state and show resume prompt
         const existingSaveState = await window.electron?.ipcRenderer.invoke('load-save-state', folderPath);
         setSaveState(existingSaveState);
+        if (existingSaveState?.sourceType) {
+          setSourceType(existingSaveState.sourceType);
+        }
         if (mode === 'thumbnail' || mode === 'video') {
-          // For thumbnail/video modes, ask whether to skip processed items instead of resume
           setShowSkipProcessedPrompt(true);
         } else {
           setShowResumePrompt(true);
         }
       } else {
-        // No save state – create one for thumbnail/video so Keep/Delete persist
         if (mode === 'thumbnail') {
-          const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+          const newSaveState = buildInitialSaveState(folderPath, settings, config);
           try {
             await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
             setSaveState(newSaveState);
           } catch (e) {
             console.warn('Failed to create initial save state for thumbnail:', e);
           }
-          const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
+          let photos = await window.electron?.ipcRenderer.invoke(
+            'scan-folder-photos',
+            folderPath,
+            includeSubfolders,
+            [],
+            settings
+          );
+          if (settings?.sourceType === 'immich-external' && config) {
+            photos = await enrichPhotosWithImmich(photos || [], folderPath, includeSubfolders, config);
+          }
           setFlatPhotos(photos || []);
         } else if (mode === 'video') {
-          const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+          const newSaveState = buildInitialSaveState(folderPath, settings, config);
           try {
             await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
             setSaveState(newSaveState);
           } catch (e) {
             console.warn('Failed to create initial save state for video:', e);
           }
-          const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', folderPath, includeSubfolders, []);
+          let videos = await window.electron?.ipcRenderer.invoke(
+            'scan-folder-videos',
+            folderPath,
+            includeSubfolders,
+            [],
+            settings
+          );
+          if (settings?.sourceType === 'immich-external' && config) {
+            videos = await enrichVideosWithImmich(videos || [], folderPath, includeSubfolders, config);
+          }
           setFlatVideos(videos || []);
         } else {
-          await startProcessing(folderPath, includeSubfolders, [], settings);
+          await startProcessing(folderPath, includeSubfolders, [], settings, config);
         }
       }
     } catch (error) {
       console.error('Error checking save state:', error);
-      // Fallback: create save state for thumbnail/video if needed, then load
+      if (handleImmichFailure(error)) {
+        return;
+      }
       if (mode === 'thumbnail') {
-        const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+        const newSaveState = buildInitialSaveState(folderPath, settings, config);
         try {
           await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
           setSaveState(newSaveState);
         } catch (e) { /* ignore */ }
-        const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfolders, []);
+        let photos = await window.electron?.ipcRenderer.invoke(
+          'scan-folder-photos',
+          folderPath,
+          includeSubfolders,
+          [],
+          settings
+        );
+        if (settings?.sourceType === 'immich-external' && config) {
+          photos = await enrichPhotosWithImmich(photos || [], folderPath, includeSubfolders, config);
+        }
         setFlatPhotos(photos || []);
       } else if (mode === 'video') {
-        const newSaveState = { folderPath, processedPhotos: [] as string[], selections: {} as Record<string, 'kept' | 'discarded'> };
+        const newSaveState = buildInitialSaveState(folderPath, settings, config);
         try {
           await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
           setSaveState(newSaveState);
         } catch (e) { /* ignore */ }
-        const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', folderPath, includeSubfolders, []);
+        let videos = await window.electron?.ipcRenderer.invoke(
+          'scan-folder-videos',
+          folderPath,
+          includeSubfolders,
+          [],
+          settings
+        );
+        if (settings?.sourceType === 'immich-external' && config) {
+          videos = await enrichVideosWithImmich(videos || [], folderPath, includeSubfolders, config);
+        }
         setFlatVideos(videos || []);
       } else {
-        await startProcessing(folderPath, includeSubfolders, [], settings);
+        await startProcessing(folderPath, includeSubfolders, [], settings, config);
       }
     } finally {
       setIsLoading(false);
@@ -116,13 +258,41 @@ const App: React.FC = () => {
   };
 
   const handleSkipProcessedYes = async () => {
-    // Skip processed photos from the save state
     if (saveState) {
+      const settings = scanSettings || (window as any).lastSettings;
       if (selectedMode === 'thumbnail') {
-      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, includeSubfoldersSelected, saveState.processedPhotos);
-      setFlatPhotos(photos || []);
+        let photos = await window.electron?.ipcRenderer.invoke(
+          'scan-folder-photos',
+          saveState.folderPath,
+          includeSubfoldersSelected,
+          saveState.processedPhotos,
+          settings
+        );
+        if (sourceType === 'immich-external' && immichConfig) {
+          photos = await enrichPhotosWithImmich(
+            photos || [],
+            saveState.folderPath,
+            includeSubfoldersSelected,
+            immichConfig
+          );
+        }
+        setFlatPhotos(photos || []);
       } else if (selectedMode === 'video') {
-        const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', saveState.folderPath, includeSubfoldersSelected, saveState.processedPhotos);
+        let videos = await window.electron?.ipcRenderer.invoke(
+          'scan-folder-videos',
+          saveState.folderPath,
+          includeSubfoldersSelected,
+          saveState.processedPhotos,
+          settings
+        );
+        if (sourceType === 'immich-external' && immichConfig) {
+          videos = await enrichVideosWithImmich(
+            videos || [],
+            saveState.folderPath,
+            includeSubfoldersSelected,
+            immichConfig
+          );
+        }
         setFlatVideos(videos || []);
       }
       setShowSkipProcessedPrompt(false);
@@ -130,31 +300,59 @@ const App: React.FC = () => {
   };
 
   const handleSkipProcessedNo = async () => {
-    // Include all photos regardless of previous processing
     if (saveState) {
+      const settings = scanSettings || (window as any).lastSettings;
       if (selectedMode === 'thumbnail') {
-      const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', saveState.folderPath, includeSubfoldersSelected, []);
-      setFlatPhotos(photos || []);
+        let photos = await window.electron?.ipcRenderer.invoke(
+          'scan-folder-photos',
+          saveState.folderPath,
+          includeSubfoldersSelected,
+          [],
+          settings
+        );
+        if (sourceType === 'immich-external' && immichConfig) {
+          photos = await enrichPhotosWithImmich(
+            photos || [],
+            saveState.folderPath,
+            includeSubfoldersSelected,
+            immichConfig
+          );
+        }
+        setFlatPhotos(photos || []);
       } else if (selectedMode === 'video') {
-        const videos = await window.electron?.ipcRenderer.invoke('scan-folder-videos', saveState.folderPath, includeSubfoldersSelected, []);
+        let videos = await window.electron?.ipcRenderer.invoke(
+          'scan-folder-videos',
+          saveState.folderPath,
+          includeSubfoldersSelected,
+          [],
+          settings
+        );
+        if (sourceType === 'immich-external' && immichConfig) {
+          videos = await enrichVideosWithImmich(
+            videos || [],
+            saveState.folderPath,
+            includeSubfoldersSelected,
+            immichConfig
+          );
+        }
         setFlatVideos(videos || []);
       }
       setShowSkipProcessedPrompt(false);
     }
   };
 
-  const startProcessing = async (folderPath: string, includeSubfolders: boolean, processedPhotos: string[] = [], settings?: any) => {
+  const startProcessing = async (
+    folderPath: string,
+    includeSubfolders: boolean,
+    processedPhotos: string[] = [],
+    settings?: any,
+    config: ImmichConnectionConfig | null = immichConfig
+  ) => {
     setIsLoading(true);
     try {
-      // Create new save state if none exists (do this first)
+      const activeSettings = settings || scanSettings || (window as any).lastSettings;
       if (!saveState) {
-        const newSaveState = {
-          folderPath,
-          processedPhotos,
-          selections: {}
-        };
-        
-        // Save the initial save state to disk first
+        const newSaveState = buildInitialSaveState(folderPath, activeSettings, config);
         try {
           console.log('Creating initial save state for:', folderPath);
           await window.electron?.ipcRenderer.invoke('save-save-state', newSaveState);
@@ -165,14 +363,25 @@ const App: React.FC = () => {
         }
       }
       
-      // Call the main process to scan the folder and create batches
-      const newBatches = await window.electron?.ipcRenderer.invoke('scan-folder', folderPath, includeSubfolders, processedPhotos, settings);
+      let newBatches = await window.electron?.ipcRenderer.invoke(
+        'scan-folder',
+        folderPath,
+        includeSubfolders,
+        processedPhotos,
+        activeSettings
+      );
+      if (activeSettings?.sourceType === 'immich-external' && config) {
+        newBatches = await enrichBatchesWithImmich(newBatches || [], folderPath, includeSubfolders, config);
+      }
       if (newBatches && newBatches.length > 0) {
         setBatches(newBatches);
         setCurrentBatchIndex(0);
       }
     } catch (error) {
       console.error('Error scanning folder:', error);
+      if (handleImmichFailure(error)) {
+        return;
+      }
     } finally {
       setIsLoading(false);
     }
@@ -180,22 +389,35 @@ const App: React.FC = () => {
 
   const handleResume = async () => {
     if (saveState) {
-      await startProcessing(saveState.folderPath, includeSubfoldersSelected, saveState.processedPhotos);
+      const settings = scanSettings || (window as any).lastSettings || { sourceType: saveState.sourceType };
+      if (settings?.sourceType === 'immich-external' && immichConfig) {
+        await setImmichSession(
+          immichConfig,
+          saveState.folderPath,
+          includeSubfoldersSelected
+        );
+      }
+      await startProcessing(
+        saveState.folderPath,
+        includeSubfoldersSelected,
+        saveState.processedPhotos,
+        settings,
+        immichConfig
+      );
       setShowResumePrompt(false);
     }
   };
 
   const handleStartOver = async () => {
     if (saveState) {
-      // Delete the save state file
       try {
         await window.electron?.ipcRenderer.invoke('delete-save-state', saveState.folderPath);
       } catch (error) {
         console.warn('Failed to delete save state:', error);
       }
       
-      // Start fresh
-      await startProcessing(saveState.folderPath, includeSubfoldersSelected);
+      const settings = scanSettings || (window as any).lastSettings || { sourceType: saveState.sourceType };
+      await startProcessing(saveState.folderPath, includeSubfoldersSelected, [], settings, immichConfig);
       setSaveState(null);
       setShowResumePrompt(false);
     }
@@ -204,6 +426,7 @@ const App: React.FC = () => {
   const handleCompletionClose = () => {
     setShowCompletionPopup(false);
     setCompletionStats(null);
+    setTournamentSessionComplete(false);
     setBatches([]);
     setCurrentBatchIndex(-1);
     setSaveState(null);
@@ -215,23 +438,36 @@ const App: React.FC = () => {
 
   const handlePhotoSelection = async (selectedPhotos: Photo[], photosToDelete: Photo[]) => {
     if (!saveState) return;
+    if (!photosToDelete.length && !selectedPhotos.length) return;
 
-    // Update save state with selections
+    const newDeletes = photosToDelete.filter((photo) => {
+      const key = getMediaReviewKey(photo);
+      return saveState.selections[key] !== 'discarded';
+    });
+    const newKeeps = selectedPhotos.filter((photo) => {
+      const key = getMediaReviewKey(photo);
+      return saveState.selections[key] !== 'kept';
+    });
+    if (!newDeletes.length && !newKeeps.length) return;
+
     const updatedSaveState = { ...saveState };
     
-    // Mark selected photos as kept
-    for (const photo of selectedPhotos) {
-      updatedSaveState.processedPhotos.push(photo.path);
-      updatedSaveState.selections[photo.path] = 'kept';
+    for (const photo of newKeeps) {
+      const key = getMediaReviewKey(photo);
+      if (!updatedSaveState.processedPhotos.includes(key)) {
+        updatedSaveState.processedPhotos.push(key);
+      }
+      updatedSaveState.selections[key] = 'kept';
     }
     
-    // Mark deleted photos as discarded
-    for (const photo of photosToDelete) {
-      updatedSaveState.processedPhotos.push(photo.path);
-      updatedSaveState.selections[photo.path] = 'discarded';
+    for (const photo of newDeletes) {
+      const key = getMediaReviewKey(photo);
+      if (!updatedSaveState.processedPhotos.includes(key)) {
+        updatedSaveState.processedPhotos.push(key);
+      }
+      updatedSaveState.selections[key] = 'discarded';
     }
     
-    // Save updated state
     try {
       await window.electron?.ipcRenderer.invoke('save-save-state', updatedSaveState);
       setSaveState(updatedSaveState);
@@ -239,78 +475,83 @@ const App: React.FC = () => {
       console.error('Failed to save state:', error);
     }
 
-    // Handle the selected photos (keep them in place) and move others to delete folder
+    if (!newDeletes.length) return;
+
     try {
       const results: Array<{ fromPath: string; toPath: string; status: 'moved' | 'skipped' | 'error'; reason?: string }> | undefined = await window.electron?.ipcRenderer.invoke('process-photos', {
-        selectedPhotos,
-        photosToDelete
+        selectedPhotos: newKeeps,
+        photosToDelete: newDeletes,
+        sourceType,
+        rootFolderPath: selectedFolderPath,
+        includeSubfolders: includeSubfoldersSelected,
       });
-      console.log('[UNDO] process-photos results count:', results?.length || 0);
-      // Push to undo stack so we can restore across batches
+      const moved = results?.filter((r) => r.status === 'moved').length ?? 0;
+      const failed = results?.filter((r) => r.status === 'error') ?? [];
+      console.log('[process-photos] moved:', moved, 'failed:', failed.length, 'of', newDeletes.length);
+      if (failed.length > 0) {
+        console.warn('[process-photos] failures:', failed);
+        const missingIds = failed.filter((r) => r.reason === 'missing-asset-id').length;
+        if (missingIds > 0) {
+          setImmichError(
+            `${missingIds} photo(s) could not be matched to Immich assets. Check path mapping (local path prefix ↔ Immich path prefix) in settings.`
+          );
+        } else {
+          setImmichError(failed[0]?.reason || 'Failed to move photos to Immich trash');
+        }
+      }
       setUndoStack(prev => [
         ...prev,
         {
           batchIndex: currentBatchIndex,
-          selectedPhotos,
-          photosToDelete,
+          selectedPhotos: newKeeps,
+          photosToDelete: newDeletes,
           moveResults: results || []
         }
       ]);
-      console.log('[UNDO] Pushed undo entry. Stack size now:', (undoStack.length + 1));
     } catch (err) {
       console.error('process-photos failed:', err);
+      setImmichError(err instanceof Error ? err.message : 'Failed to trash photos in Immich');
     }
   };
 
   const handleBatchComplete = useCallback(async () => {
     console.log('handleBatchComplete called', { currentBatchIndex, batchesLength: batches.length });
-    // Move to next batch if available
     if (currentBatchIndex < batches.length - 1) {
       console.log('Moving to next batch', currentBatchIndex + 1);
       setCurrentBatchIndex(prev => prev + 1);
-    } else {
-      console.log('All batches complete, calculating stats');
-      const totalPhotos = batches.reduce((sum, batch) => sum + batch.photos.length, 0);
-      
-      // Derive cumulative delete stats across folder (_delete) and estimate per-session kept
-      let keptPhotos = 0;
-      if (saveState) {
-        for (const path of saveState.processedPhotos) {
-          if (saveState.selections[path] === 'kept') keptPhotos++;
-        }
-      }
-      const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
-      // Compute requested four fields
-      const imagesDeleted = detailed?.imageCount ?? 0;
-      const videosDeleted = detailed?.videoCount ?? 0;
-      // Estimate processed kept: count kept photos in saveState among images (heuristic: paths with image extensions)
-      const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'];
-      const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.mpg', '.mpeg'];
-      const getExt = (p: string) => p.slice(p.lastIndexOf('.')).toLowerCase();
-      let keptImages = 0;
-      let keptVideos = 0;
-      if (saveState) {
-        for (const p of saveState.processedPhotos) {
-          if (saveState.selections[p] === 'kept') {
-            const ext = getExt(p);
-            if (imageExts.includes(ext)) keptImages++;
-            else if (videoExts.includes(ext)) keptVideos++;
+      return;
+    }
+
+    console.log('All batches complete');
+    setTournamentSessionComplete(true);
+    setCompletionStats(buildSessionStatsFromSaveState(saveState));
+    setShowCompletionPopup(true);
+
+    if (sourceType !== 'immich-external') {
+      try {
+        const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
+        let keptImages = 0;
+        let keptVideos = 0;
+        if (saveState) {
+          for (const p of saveState.processedPhotos) {
+            if (saveState.selections[p] === 'kept') {
+              const ext = getExt(p);
+              if (imageExts.includes(ext)) keptImages++;
+              else if (videoExts.includes(ext)) keptVideos++;
+            }
           }
         }
+        setCompletionStats({
+          totalPhotosProcessed: keptImages + (detailed?.imageCount ?? 0),
+          photosDeleted: detailed?.imageCount ?? 0,
+          videosProcessed: keptVideos + (detailed?.videoCount ?? 0),
+          totalSpaceSaved: detailed?.bytes ?? 0,
+        });
+      } catch (error) {
+        console.warn('Failed to compute local delete stats:', error);
       }
-      const stats = {
-        totalPhotosProcessed: keptImages + imagesDeleted,
-        photosDeleted: imagesDeleted,
-        videosProcessed: keptVideos + videosDeleted,
-        totalSpaceSaved: detailed?.bytes ?? 0
-      };
-      
-      console.log('Completion stats:', stats);
-      
-      setCompletionStats(stats);
-      setShowCompletionPopup(true);
     }
-  }, [currentBatchIndex, batches.length, saveState]);
+  }, [currentBatchIndex, batches.length, saveState, sourceType, selectedFolderPath]);
 
   // Global undo (Ctrl+Z / Cmd+Z): restore last completed batch action
   const handleGlobalUndo = useCallback(async () => {
@@ -330,11 +571,20 @@ const App: React.FC = () => {
       moveResults: last.moveResults?.length || 0
     });
 
-    // 1) Restore moved files from _delete
+    // 1) Restore moved files from _delete or Immich trash
     for (const r of last.moveResults) {
       if (r.status === 'moved') {
         try {
-          await window.electron?.ipcRenderer.invoke('restore-photo', { photo: null, fromPath: r.fromPath, toPath: r.toPath });
+          const photo =
+            last.photosToDelete.find((p) => p.path === r.fromPath) ||
+            last.selectedPhotos.find((p) => p.path === r.fromPath);
+          await window.electron?.ipcRenderer.invoke('restore-photo', {
+            photo,
+            fromPath: r.fromPath,
+            toPath: r.toPath,
+            assetId: photo?.assetId,
+            sourceType,
+          });
           console.log('[UNDO] Restored', r.toPath, '->', r.fromPath);
         } catch (e) {
           console.warn('Failed to restore during undo:', r.fromPath, e);
@@ -343,18 +593,21 @@ const App: React.FC = () => {
     }
 
     // 2) Revert save state entries for this batch (both kept and deleted)
-    const pathsToRevert = new Set<string>([...last.selectedPhotos.map(p => p.path), ...last.photosToDelete.map(p => p.path)]);
-    const newProcessed = (saveState.processedPhotos || []).filter(p => !pathsToRevert.has(p));
+    const keysToRevert = new Set<string>([
+      ...last.selectedPhotos.map((p) => getMediaReviewKey(p)),
+      ...last.photosToDelete.map((p) => getMediaReviewKey(p)),
+    ]);
+    const newProcessed = (saveState.processedPhotos || []).filter((p) => !keysToRevert.has(p));
     const newSelections = { ...saveState.selections } as Record<string, 'kept' | 'discarded'>;
-    for (const p of pathsToRevert) {
-      delete newSelections[p];
+    for (const key of keysToRevert) {
+      delete newSelections[key];
     }
     const reverted: SaveState = { ...saveState, processedPhotos: newProcessed, selections: newSelections };
 
     try {
       await window.electron?.ipcRenderer.invoke('save-save-state', reverted);
       setSaveState(reverted);
-      console.log('[UNDO] Save state reverted for', pathsToRevert.size, 'paths');
+      console.log('[UNDO] Save state reverted for', keysToRevert.size, 'items');
     } catch (e) {
       console.error('Failed to persist reverted save state:', e);
     }
@@ -507,7 +760,8 @@ const App: React.FC = () => {
       {shouldShowThumbnail ? (
         <ThumbnailStripCuller 
           folderPath={selectedFolderPath} 
-          photos={flatPhotos} 
+          photos={flatPhotos}
+          sourceType={sourceType}
           onExit={async () => {
             try {
               const detailed = await window.electron?.ipcRenderer.invoke('get-delete-stats-detailed', selectedFolderPath);
@@ -541,7 +795,8 @@ const App: React.FC = () => {
       ) : shouldShowVideo ? (
         <VideoMode 
           folderPath={selectedFolderPath} 
-          videos={flatVideos} 
+          videos={flatVideos}
+          sourceType={sourceType}
           selections={saveState?.selections || {}}
           initialSortBy={(window as any).lastSettings?.video?.sortBy}
           initialSortOrder={(window as any).lastSettings?.video?.sortOrder}
@@ -585,12 +840,13 @@ const App: React.FC = () => {
           onKeep={(video) => {
             setSaveState(prev => {
               if (!prev) return prev;
+              const key = getMediaReviewKey(video);
               const next = {
                 ...prev,
-                processedPhotos: prev.processedPhotos.includes(video.path)
+                processedPhotos: prev.processedPhotos.includes(key)
                   ? prev.processedPhotos
-                  : [...prev.processedPhotos, video.path],
-                selections: { ...prev.selections, [video.path]: 'kept' as const }
+                  : [...prev.processedPhotos, key],
+                selections: { ...prev.selections, [key]: 'kept' as const }
               };
               window.electron?.ipcRenderer.invoke('save-save-state', next).catch(e => console.error('Failed to persist video keep:', e));
               return next;
@@ -599,12 +855,13 @@ const App: React.FC = () => {
           onDelete={(video) => {
             setSaveState(prev => {
               if (!prev) return prev;
+              const key = getMediaReviewKey(video);
               const next = {
                 ...prev,
-                processedPhotos: prev.processedPhotos.includes(video.path)
+                processedPhotos: prev.processedPhotos.includes(key)
                   ? prev.processedPhotos
-                  : [...prev.processedPhotos, video.path],
-                selections: { ...prev.selections, [video.path]: 'discarded' as const }
+                  : [...prev.processedPhotos, key],
+                selections: { ...prev.selections, [key]: 'discarded' as const }
               };
               window.electron?.ipcRenderer.invoke('save-save-state', next).catch(e => console.error('Failed to persist video delete:', e));
               return next;
@@ -613,10 +870,11 @@ const App: React.FC = () => {
           onRestore={(video) => {
             setSaveState(prev => {
               if (!prev) return prev;
-              const { [video.path]: _, ...restSelections } = prev.selections || {};
+              const key = getMediaReviewKey(video);
+              const { [key]: _, ...restSelections } = prev.selections || {};
               const next = {
                 ...prev,
-                processedPhotos: (prev.processedPhotos || []).filter(p => p !== video.path),
+                processedPhotos: (prev.processedPhotos || []).filter(p => p !== key),
                 selections: restSelections
               };
               window.electron?.ipcRenderer.invoke('save-save-state', next).catch(e => console.error('Failed to persist video restore:', e));
@@ -624,20 +882,53 @@ const App: React.FC = () => {
             });
           }}
         />
-      ) : currentBatchIndex !== -1 && currentBatch && selectedMode === 'tournament' ? (
-        <PhotoPairViewer
+      ) : !tournamentSessionComplete && currentBatchIndex !== -1 && currentBatch && selectedMode === 'tournament' ? (
+        <>
+          {immichError && (
+            <div className="resume-prompt" style={{ margin: '1rem' }}>
+              <h2>Immich Error</h2>
+              <p>{immichError}</p>
+              <p style={{ fontSize: 14, color: '#ccc' }}>
+                Set Local Path Prefix and Immich Path Prefix to match what Immich shows in photo Info.
+              </p>
+              <div className="resume-buttons">
+                <button type="button" onClick={() => setImmichError(null)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+          <PhotoPairViewer
           batch={currentBatch}
           currentBatchIndex={currentBatchIndex}
           totalBatches={batches.length}
+          sourceType={sourceType}
           onSelection={handlePhotoSelection}
           onBatchComplete={handleBatchComplete}
           onUndoLastAction={handleGlobalUndo}
         />
+        </>
       ) : (
-        <BatchSelector 
-          onFolderSelect={handleFolderSelect}
-          isLoading={isLoading}
-        />
+        <>
+          {immichError && (
+            <div className="resume-prompt" style={{ margin: '1rem' }}>
+              <h2>Immich Error</h2>
+              <p>{immichError}</p>
+              <p style={{ fontSize: 14, color: '#ccc' }}>
+                Check path mapping (local HDD path vs Immich container path) and that the folder is an Immich external library import path.
+              </p>
+              <div className="resume-buttons">
+                <button type="button" onClick={() => setImmichError(null)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+          <BatchSelector 
+            onFolderSelect={handleFolderSelect}
+            isLoading={isLoading}
+          />
+        </>
       )}
 
       {showCompletionPopup && completionStats && (
@@ -650,7 +941,13 @@ const App: React.FC = () => {
             setSelectedMode('thumbnail');
             const folderPath = saveState?.folderPath || selectedFolderPath;
             const processed = saveState?.processedPhotos || [];
-            const photos = await window.electron?.ipcRenderer.invoke('scan-folder-photos', folderPath, includeSubfoldersSelected, processed);
+            const photos = await window.electron?.ipcRenderer.invoke(
+              'scan-folder-photos',
+              folderPath,
+              includeSubfoldersSelected,
+              processed,
+              scanSettings || (window as any).lastSettings
+            );
             setFlatPhotos(photos || []);
             setShowCompletionPopup(false);
           } : undefined}

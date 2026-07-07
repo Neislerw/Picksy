@@ -1,3 +1,5 @@
+export type MediaSourceType = 'local' | 'immich-external';
+
 export interface Photo {
   id: string;
   path: string;
@@ -6,6 +8,10 @@ export interface Photo {
   timestampSource?: 'exif' | 'filename' | 'created';
   selected?: boolean;
   toDelete?: boolean;
+  source?: MediaSourceType;
+  assetId?: string;
+  originalPath?: string;
+  displayPath?: string;
 }
 
 export interface Video {
@@ -18,6 +24,10 @@ export interface Video {
   fileSize: number; // in bytes
   selected?: boolean;
   toDelete?: boolean;
+  source?: MediaSourceType;
+  assetId?: string;
+  originalPath?: string;
+  displayPath?: string;
 }
 
 export interface PhotoBatch {
@@ -27,10 +37,39 @@ export interface PhotoBatch {
   photosToDelete?: Photo[];
 }
 
+export interface ImmichPathMapping {
+  localPrefix: string;
+  immichPrefix: string;
+}
+
+export interface ImmichConnectionConfig {
+  serverUrl: string;
+  apiKey: string;
+  pathMapping?: ImmichPathMapping;
+}
+
 export interface SaveState {
+  version?: number;
+  sourceType?: MediaSourceType;
   folderPath: string;
-  processedPhotos: string[]; // Array of photo file paths that have been processed
-  selections: Record<string, 'kept' | 'discarded'>; // photo path -> selection
+  processedPhotos: string[];
+  selections: Record<string, 'kept' | 'discarded'>;
+  immich?: {
+    serverUrl: string;
+    pathMapping?: ImmichPathMapping;
+  };
+}
+
+export interface ScanSettings {
+  batchTimeWindow?: number;
+  minBatchSize?: number;
+  maxBatchSize?: number;
+  sortingMode?: 'dateTaken' | 'dateCreated' | 'filename';
+  supportedExtensions?: string[];
+  excludePatterns?: string[];
+  sourceType?: MediaSourceType;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface AppState {
@@ -39,4 +78,8 @@ export interface AppState {
   saveState?: SaveState;
   isLoading: boolean;
   error?: string;
-} 
+}
+
+export function getMediaReviewKey(item: Pick<Photo | Video, 'path' | 'assetId'>): string {
+  return item.assetId || item.path;
+}

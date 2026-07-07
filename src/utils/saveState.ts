@@ -1,14 +1,26 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SaveState } from '../types';
+import { ImmichPathMapping, MediaSourceType, SaveState } from '../types';
 
 const SAVE_STATE_FILENAME = '.pic2-savestate.json';
+export const SAVE_STATE_VERSION = 2;
 
 /**
  * Get the save state file path for a given folder
  */
 export function getSaveStatePath(folderPath: string): string {
   return path.join(folderPath, SAVE_STATE_FILENAME);
+}
+
+function normalizeLoadedSaveState(saveState: SaveState): SaveState {
+  return {
+    version: saveState.version ?? 1,
+    sourceType: saveState.sourceType ?? 'local',
+    folderPath: saveState.folderPath,
+    processedPhotos: saveState.processedPhotos ?? [],
+    selections: saveState.selections ?? {},
+    immich: saveState.immich,
+  };
 }
 
 /**
@@ -39,7 +51,7 @@ export async function loadSaveState(folderPath: string): Promise<SaveState | nul
       return null;
     }
     
-    return saveState;
+    return normalizeLoadedSaveState(saveState);
   } catch (error) {
     console.warn('Failed to load save state:', error);
     return null;
@@ -52,7 +64,11 @@ export async function loadSaveState(folderPath: string): Promise<SaveState | nul
 export async function saveSaveState(saveState: SaveState): Promise<void> {
   try {
     const saveStatePath = getSaveStatePath(saveState.folderPath);
-    const data = JSON.stringify(saveState, null, 2);
+    const payload: SaveState = {
+      ...saveState,
+      version: SAVE_STATE_VERSION,
+    };
+    const data = JSON.stringify(payload, null, 2);
     await fs.promises.writeFile(saveStatePath, data, 'utf8');
   } catch (error) {
     console.error('Failed to save state:', error);
@@ -63,11 +79,18 @@ export async function saveSaveState(saveState: SaveState): Promise<void> {
 /**
  * Create a new save state for a folder
  */
-export function createNewSaveState(folderPath: string): SaveState {
+export function createNewSaveState(
+  folderPath: string,
+  sourceType: MediaSourceType = 'local',
+  immich?: { serverUrl: string; pathMapping?: ImmichPathMapping }
+): SaveState {
   return {
+    version: SAVE_STATE_VERSION,
+    sourceType,
     folderPath,
     processedPhotos: [],
-    selections: {}
+    selections: {},
+    immich,
   };
 }
 
@@ -76,15 +99,17 @@ export function createNewSaveState(folderPath: string): SaveState {
  */
 export function updateSaveState(
   saveState: SaveState,
-  photoPath: string,
+  reviewKey: string,
   selection: 'kept' | 'discarded'
 ): SaveState {
   return {
     ...saveState,
-    processedPhotos: [...saveState.processedPhotos, photoPath],
+    processedPhotos: saveState.processedPhotos.includes(reviewKey)
+      ? saveState.processedPhotos
+      : [...saveState.processedPhotos, reviewKey],
     selections: {
       ...saveState.selections,
-      [photoPath]: selection
+      [reviewKey]: selection
     }
   };
 }
@@ -93,8 +118,15 @@ export function updateSaveState(
  * Filter photos to exclude already processed ones
  */
 export function filterUnprocessedPhotos(
-  photos: Array<{ path: string }>,
+  photos: Array<{ path: string; assetId?: string }>,
   processedPhotos: string[]
-): Array<{ path: string }> {
-  return photos.filter(photo => !processedPhotos.includes(photo.path));
+): Array<{ path: string; assetId?: string }> {
+  const processedSet = new Set(processedPhotos);
+  return photos.filter(
+    (photo) => !processedSet.has(photo.path) && !(photo.assetId && processedSet.has(photo.assetId))
+  );
+}
+
+export function isImmichSourceType(sourceType?: MediaSourceType): boolean {
+  return sourceType === 'immich-external';
 }

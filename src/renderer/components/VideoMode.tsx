@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Video } from '../../types';
+import { MediaSourceType, Video } from '../../types';
 import '../styles/VideoMode.css';
 import Keycap from './Keycap';
 
 interface VideoModeProps {
   folderPath: string;
   videos: Video[];
+  sourceType?: MediaSourceType;
   onExit: () => void;
   onComplete?: () => void;
   onKeep?: (video: Video) => void;
@@ -27,7 +28,7 @@ interface MovedRecord {
   toPath: string;
 }
 
-const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onComplete, onKeep, onDelete, onRestore, selections = {}, initialSortBy = 'date', initialSortOrder = 'asc', scrubForwardSeconds = 5, scrubBackwardSeconds = 3, dateSource = 'filename' }) => {
+const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, sourceType = 'local', onExit, onComplete, onKeep, onDelete, onRestore, selections = {}, initialSortBy = 'date', initialSortOrder = 'asc', scrubForwardSeconds = 5, scrubBackwardSeconds = 3, dateSource = 'filename' }) => {
   const [index, setIndex] = useState<number>(0);
   const [movedStack, setMovedStack] = useState<MovedRecord[]>([]);
   const [movedPaths, setMovedPaths] = useState<Set<string>>(new Set());
@@ -139,7 +140,7 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
     try {
       const res: Array<{ fromPath: string; toPath: string; status?: string; reason?: string }> | undefined = await (window as any).electron?.ipcRenderer.invoke(
         'process-photos',
-        { selectedPhotos: [], photosToDelete: [{ path }] }
+        { selectedPhotos: [], photosToDelete: [video], sourceType }
       );
       if (res && res.length > 0 && res[0].status === 'moved') {
         setMovedStack(prev => [...prev, { video, fromPath: res[0].fromPath, toPath: res[0].toPath }]);
@@ -152,9 +153,13 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
       console.error('Failed to move to _delete:', e);
       return false;
     }
-  }, []);
+  }, [sourceType]);
 
   const handleMoveToFavorites = useCallback(async (video: Video): Promise<boolean> => {
+    if (sourceType === 'immich-external') {
+      console.warn('[VideoMode] Favorites are not supported in Immich external library mode');
+      return false;
+    }
     const path = video?.path;
     if (!path || typeof path !== 'string') {
       console.warn('[VideoMode] handleMoveToFavorites: missing or invalid path', video);
@@ -183,7 +188,12 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
     if (idx === -1) return;
     const record = movedStack[movedStack.length - 1 - idx];
     try {
-      await (window as any).electron?.ipcRenderer.invoke('restore-photo', record);
+      await (window as any).electron?.ipcRenderer.invoke('restore-photo', {
+        ...record,
+        photo: record.video,
+        assetId: record.video.assetId,
+        sourceType,
+      });
       setMovedStack(prev => prev.filter(r => !(r.fromPath === record.fromPath && r.toPath === record.toPath)));
       setMovedPaths(prev => {
         const next = new Set(prev);
@@ -193,7 +203,7 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
     } catch (e) {
       console.error('Failed to restore specific video:', e);
     }
-  }, [movedStack]);
+  }, [movedStack, sourceType]);
 
   const handleUndo = useCallback(async () => {
     const lastType = actionOrder[actionOrder.length - 1];
@@ -205,7 +215,12 @@ const VideoMode: React.FC<VideoModeProps> = ({ folderPath, videos, onExit, onCom
         return;
       }
       try {
-        await (window as any).electron?.ipcRenderer.invoke('restore-photo', last);
+        await (window as any).electron?.ipcRenderer.invoke('restore-photo', {
+          ...last,
+          photo: last.video,
+          assetId: last.video.assetId,
+          sourceType,
+        });
         setMovedStack(prev => prev.slice(0, -1));
         setMovedPaths(prev => {
           const next = new Set(prev);

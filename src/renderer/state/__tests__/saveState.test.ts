@@ -96,7 +96,12 @@ describe('saveState', () => {
       const result = await loadSaveState(testFolderPath);
       
       expect(mockFs.promises.readFile).toHaveBeenCalledWith(testSaveStatePath, 'utf8');
-      expect(result).toEqual(mockSaveState);
+      expect(result).toEqual({
+        ...mockSaveState,
+        version: 1,
+        sourceType: 'local',
+        immich: undefined,
+      });
     });
 
     it('should return null for invalid save state format', async () => {
@@ -145,7 +150,7 @@ describe('saveState', () => {
       
       expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
         testSaveStatePath,
-        JSON.stringify(mockSaveState, null, 2),
+        JSON.stringify({ ...mockSaveState, version: 2 }, null, 2),
         'utf8'
       );
     });
@@ -169,6 +174,8 @@ describe('saveState', () => {
       const result = createNewSaveState(testFolderPath);
       
       expect(result).toEqual({
+        version: 2,
+        sourceType: 'local',
         folderPath: testFolderPath,
         processedPhotos: [],
         selections: {}

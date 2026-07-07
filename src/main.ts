@@ -1,6 +1,38 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ImmichConnectionConfig } from './types';
+import { createImmichClient } from './utils/immichClient';
+
+let sessionImmichConfig: ImmichConnectionConfig | null = null;
+let sessionImmichRootFolder: string | null = null;
+let sessionImmichIncludeSubfolders = true;
+
+function buildImageScanOptions(settings?: any) {
+  const { buildImmichImageScanOptions } = require('./utils/imageBatcher');
+  if (settings?.sourceType === 'immich-external') {
+    return buildImmichImageScanOptions(settings);
+  }
+  return {
+    supportedExtensions: settings?.supportedExtensions,
+    excludePatterns: settings?.excludePatterns,
+    dateFrom: settings?.dateFrom,
+    dateTo: settings?.dateTo,
+  };
+}
+
+function buildVideoScanOptions(settings?: any) {
+  const { buildImmichVideoScanOptions } = require('./utils/videoBatcher');
+  if (settings?.sourceType === 'immich-external') {
+    return buildImmichVideoScanOptions(settings);
+  }
+  return {
+    supportedExtensions: settings?.supportedExtensions,
+    excludePatterns: settings?.excludePatterns,
+    dateFrom: settings?.dateFrom,
+    dateTo: settings?.dateTo,
+  };
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -56,7 +88,82 @@ function setupIpcHandlers() {
     }
     return candidate;
   }
-  // Handle folder selection
+  // Immich session config (API key kept in memory only)
+  ipcMain.handle(
+    'immich-set-session',
+    async (
+      _event,
+      config: ImmichConnectionConfig | null,
+      rootFolderPath?: string | null,
+      includeSubfolders?: boolean
+    ) => {
+      sessionImmichConfig = config;
+      sessionImmichRootFolder = rootFolderPath ?? null;
+      sessionImmichIncludeSubfolders = includeSubfolders ?? true;
+      return { ok: true };
+    }
+  );
+
+  ipcMain.handle('immich-test-connection', async (_event, config: ImmichConnectionConfig) => {
+    try {
+      const client = createImmichClient(config);
+      const result = await client.testConnection();
+      if (result.ok && result.effectiveServerUrl) {
+        sessionImmichConfig = { ...config, serverUrl: result.effectiveServerUrl };
+      }
+      return result;
+    } catch (error: any) {
+      return { ok: false, error: String(error?.message || error) };
+    }
+  });
+
+  ipcMain.handle(
+    'immich-match-assets',
+    async (
+      _event,
+      payload: {
+        config?: ImmichConnectionConfig;
+        localPaths: string[];
+        rootFolderPath: string;
+        includeSubfolders: boolean;
+      }
+    ) => {
+      const config = payload.config || sessionImmichConfig;
+      if (!config?.serverUrl || !config?.apiKey) {
+        return { ok: false, error: 'Immich connection not configured', matches: [] };
+      }
+      try {
+        const client = createImmichClient(config);
+        const matches = await client.matchLocalPaths(
+          payload.localPaths,
+          payload.rootFolderPath,
+          payload.includeSubfolders
+        );
+        return { ok: true, matches };
+      } catch (error: any) {
+        return { ok: false, error: String(error?.message || error), matches: [] };
+      }
+    }
+  );
+
+  ipcMain.handle('immich-trash-assets', async (_event, payload: { assetIds: string[]; config?: ImmichConnectionConfig }) => {
+    const config = payload.config || sessionImmichConfig;
+    if (!config?.serverUrl || !config?.apiKey) {
+      return { ok: false, error: 'Immich connection not configured' };
+    }
+    const client = createImmichClient(config);
+    return client.trashAssets(payload.assetIds);
+  });
+
+  ipcMain.handle('immich-restore-assets', async (_event, payload: { assetIds: string[]; config?: ImmichConnectionConfig }) => {
+    const config = payload.config || sessionImmichConfig;
+    if (!config?.serverUrl || !config?.apiKey) {
+      return { ok: false, error: 'Immich connection not configured' };
+    }
+    const client = createImmichClient(config);
+    return client.restoreAssets(payload.assetIds);
+  });
+
   ipcMain.handle('select-folder', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory']
@@ -136,12 +243,13 @@ function setupIpcHandlers() {
       includeSubfolders,
       processedPhotos,
       sortingMode,
-      sendProgress
+      sendProgress,
+      buildImageScanOptions(settings)
     );
   });
 
   // Flat scan for photos (no batching) with optional processed filtering
-  ipcMain.handle('scan-folder-photos', async (event, folderPath: string, includeSubfolders: boolean = true, processedPhotos: string[] = []) => {
+  ipcMain.handle('scan-folder-photos', async (event, folderPath: string, includeSubfolders: boolean = true, processedPhotos: string[] = [], settings?: any) => {
     const { scanFolderForImages } = require('./utils/imageBatcher');
     const webContents = (event?.sender);
     const sendProgress = (update: { stage: string; current: number; total: number; path?: string }) => {
@@ -149,7 +257,13 @@ function setupIpcHandlers() {
         webContents?.send('scan-progress', update);
       } catch {}
     };
-    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders, 'dateTaken', sendProgress);
+    const allPhotos = await scanFolderForImages(
+      folderPath,
+      includeSubfolders,
+      settings?.sortingMode || 'dateTaken',
+      sendProgress,
+      buildImageScanOptions(settings)
+    );
     if (processedPhotos && processedPhotos.length) {
       return allPhotos.filter((p: any) => !processedPhotos.includes(p.path));
     }
@@ -157,7 +271,7 @@ function setupIpcHandlers() {
   });
 
   // Flat scan for videos (no batching) with optional processed filtering
-  ipcMain.handle('scan-folder-videos', async (event, folderPath: string, includeSubfolders: boolean = true, processedVideos: string[] = []) => {
+  ipcMain.handle('scan-folder-videos', async (event, folderPath: string, includeSubfolders: boolean = true, processedVideos: string[] = [], settings?: any) => {
     const { scanFolderForVideos } = require('./utils/videoBatcher');
     const webContents = (event?.sender);
     const sendProgress = (update: { stage: string; current: number; total: number; path?: string }) => {
@@ -165,7 +279,12 @@ function setupIpcHandlers() {
         webContents?.send('scan-progress', update);
       } catch {}
     };
-    const allVideos = await scanFolderForVideos(folderPath, includeSubfolders, sendProgress);
+    const allVideos = await scanFolderForVideos(
+      folderPath,
+      includeSubfolders,
+      sendProgress,
+      buildVideoScanOptions(settings)
+    );
     if (processedVideos && processedVideos.length) {
       return allVideos.filter((v: any) => !processedVideos.includes(v.path));
     }
@@ -290,10 +409,84 @@ function setupIpcHandlers() {
     return { imageCount, videoCount, bytes };
   });
 
-  // Handle photo/video processing: move items to _delete (used by tournament, thumbnail, and video modes).
-  // Expects items with .path (photos and videos both have path).
-  ipcMain.handle('process-photos', async (event, { selectedPhotos, photosToDelete }) => {
-    const results: Array<{ fromPath: string; toPath: string; status: 'moved' | 'skipped' | 'error'; reason?: string }> = [];
+  // Handle photo/video processing: move items to _delete (local) or trash via Immich API.
+  ipcMain.handle('process-photos', async (event, { selectedPhotos, photosToDelete, sourceType, rootFolderPath, includeSubfolders }) => {
+    const results: Array<{
+      fromPath: string;
+      toPath: string;
+      status: 'moved' | 'skipped' | 'error';
+      reason?: string;
+      assetId?: string;
+    }> = [];
+
+    if (sourceType === 'immich-external') {
+      const config = sessionImmichConfig;
+      const rootFolder = rootFolderPath || sessionImmichRootFolder;
+      const scanSubfolders = includeSubfolders ?? sessionImmichIncludeSubfolders;
+      if (!config?.serverUrl || !config?.apiKey) {
+        for (const item of photosToDelete || []) {
+          results.push({
+            fromPath: item.path,
+            toPath: item.path,
+            status: 'error',
+            reason: 'immich-not-configured',
+          });
+        }
+        return results;
+      }
+
+      const client = createImmichClient(config);
+      const resolvedItems: Array<{ path: string; assetId: string }> = [];
+
+      for (const item of photosToDelete || []) {
+        const itemPath: string = item.path;
+        let assetId: string | undefined = item.assetId;
+        if (!assetId && rootFolder) {
+          try {
+            const match = await client.resolveAssetForLocalPath(itemPath, rootFolder, scanSubfolders);
+            assetId = match.assetId;
+          } catch (error) {
+            console.warn('[process-photos] Immich match failed for', itemPath, error);
+          }
+        }
+        if (!assetId) {
+          console.warn('[process-photos] missing Immich asset id for', itemPath);
+          results.push({
+            fromPath: itemPath,
+            toPath: itemPath,
+            status: 'error',
+            reason: 'missing-asset-id',
+          });
+          continue;
+        }
+        resolvedItems.push({ path: itemPath, assetId });
+      }
+
+      if (resolvedItems.length) {
+        const assetIds = resolvedItems.map((item) => item.assetId);
+        const trashResult = await client.trashAssets(assetIds);
+        for (const item of resolvedItems) {
+          if (trashResult.ok) {
+            results.push({
+              fromPath: item.path,
+              toPath: item.path,
+              status: 'moved',
+              assetId: item.assetId,
+            });
+          } else {
+            results.push({
+              fromPath: item.path,
+              toPath: item.path,
+              status: 'error',
+              reason: trashResult.error,
+              assetId: item.assetId,
+            });
+          }
+        }
+      }
+      return results;
+    }
+
     for (const item of photosToDelete || []) {
       try {
         const itemPath: string = item.path;
@@ -382,9 +575,26 @@ function setupIpcHandlers() {
     return results;
   });
 
-  // Handle restoring a moved photo from _delete or _favorites back to original path (for undo)
-  ipcMain.handle('restore-photo', async (event, payload: { photo: any; fromPath: string; toPath: string }) => {
+  // Handle restoring a moved photo from _delete/_favorites (local) or Immich trash (API undo)
+  ipcMain.handle('restore-photo', async (event, payload: { photo?: any; fromPath: string; toPath: string; assetId?: string; sourceType?: string }) => {
     try {
+      if (payload.sourceType === 'immich-external') {
+        const assetId = payload.assetId || payload.photo?.assetId;
+        if (!assetId) {
+          throw new Error('Missing assetId for Immich restore');
+        }
+        const config = sessionImmichConfig;
+        if (!config?.serverUrl || !config?.apiKey) {
+          throw new Error('Immich connection not configured');
+        }
+        const client = createImmichClient(config);
+        const result = await client.restoreAssets([assetId]);
+        if (!result.ok) {
+          throw new Error(result.error || 'Immich restore failed');
+        }
+        return;
+      }
+
       const { fromPath, toPath } = payload;
       // If the toPath exists (in _delete) and original fromPath does not, move back
       if (fs.existsSync(toPath) && !fs.existsSync(fromPath)) {

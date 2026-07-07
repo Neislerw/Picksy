@@ -1,16 +1,33 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Video } from '../types';
+import { DEFAULT_IMMICH_EXCLUDE_PATTERNS, isExcludedByPatterns } from './globMatch';
+import { hasDateRangeFilter, isTimestampInDateRange } from './dateFilter';
+import { shouldSkipScanDirectory } from './immichScan';
 
 // Supported video file extensions
-const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.mpg', '.mpeg'];
+const DEFAULT_VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.mpg', '.mpeg'];
+
+export interface VideoScanOptions {
+  includeSubfolders?: boolean;
+  supportedExtensions?: string[];
+  excludePatterns?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+function resolveVideoExtensions(extensions?: string[]): string[] {
+  if (!extensions?.length) return DEFAULT_VIDEO_EXTENSIONS;
+  return extensions.map((ext) => (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase());
+}
 
 /**
  * Check if a file is a video based on its extension
  */
-export function isVideoFile(filename: string): boolean {
+export function isVideoFile(filename: string, extensions?: string[]): boolean {
   const ext = path.extname(filename).toLowerCase();
-  return VIDEO_EXTENSIONS.includes(ext);
+  const allowed = resolveVideoExtensions(extensions);
+  return allowed.includes(ext);
 }
 
 /**
@@ -114,20 +131,28 @@ export async function getVideoTimestamp(filePath: string, stats: fs.Stats): Prom
 /**
  * Recursively scan a directory for video files
  */
-export async function countVideoFiles(dirPath: string, includeSubfolders: boolean = true): Promise<number> {
+export async function countVideoFiles(
+  dirPath: string,
+  includeSubfolders: boolean = true,
+  scanOptions?: VideoScanOptions
+): Promise<number> {
   let count = 0;
+  const extensions = resolveVideoExtensions(scanOptions?.supportedExtensions);
+  const excludePatterns = scanOptions?.excludePatterns ?? [];
   try {
     const items = await fs.promises.readdir(dirPath);
     for (const item of items) {
       const fullPath = path.join(dirPath, item);
       const stats = await fs.promises.stat(fullPath);
       if (stats.isDirectory()) {
-        if (item === '_delete' || item === '_favorites') continue;
+        if (shouldSkipScanDirectory(dirPath, item, scanOptions)) continue;
         if (includeSubfolders) {
-          count += await countVideoFiles(fullPath, includeSubfolders);
+          count += await countVideoFiles(fullPath, includeSubfolders, scanOptions);
         }
-      } else if (stats.isFile() && isVideoFile(item)) {
-        count += 1;
+      } else if (stats.isFile() && isVideoFile(item, extensions)) {
+        if (!isExcludedByPatterns(fullPath, excludePatterns)) {
+          count += 1;
+        }
       }
     }
   } catch (error) {
@@ -141,9 +166,12 @@ export async function scanDirectoryForVideos(
   dirPath: string,
   includeSubfolders: boolean = true,
   onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void,
-  progressCtx?: { processed: number; total: number }
+  progressCtx?: { processed: number; total: number },
+  scanOptions?: VideoScanOptions
 ): Promise<Video[]> {
   const videos: Video[] = [];
+  const extensions = resolveVideoExtensions(scanOptions?.supportedExtensions);
+  const excludePatterns = scanOptions?.excludePatterns ?? [];
   
   try {
     const items = await fs.promises.readdir(dirPath);
@@ -153,19 +181,31 @@ export async function scanDirectoryForVideos(
       const stats = await fs.promises.stat(fullPath);
       
       if (stats.isDirectory()) {
-        // Always skip _delete and _favorites folders
-        if (item === '_delete' || item === '_favorites') {
+        if (shouldSkipScanDirectory(dirPath, item, scanOptions)) {
           continue;
         }
         // Only scan subdirectories if includeSubfolders is true
         if (includeSubfolders) {
-          const subVideos = await scanDirectoryForVideos(fullPath, includeSubfolders, onProgress, progressCtx);
+          const subVideos = await scanDirectoryForVideos(
+            fullPath,
+            includeSubfolders,
+            onProgress,
+            progressCtx,
+            scanOptions
+          );
           videos.push(...subVideos);
         }
-      } else if (stats.isFile() && isVideoFile(item)) {
+      } else if (stats.isFile() && isVideoFile(item, extensions)) {
+        if (isExcludedByPatterns(fullPath, excludePatterns)) {
+          continue;
+        }
         // Extract video metadata
         const metadata = await extractVideoMetadata(fullPath);
         const timestamp = metadata.timestamp || await getVideoTimestamp(fullPath, stats);
+
+        if (!isTimestampInDateRange(timestamp, scanOptions)) {
+          continue;
+        }
         
         // Create Video object with metadata
         const video: Video = {
@@ -179,7 +219,15 @@ export async function scanDirectoryForVideos(
         videos.push(video);
         if (progressCtx && onProgress) {
           progressCtx.processed += 1;
-          onProgress({ stage: 'Scanning videos', current: progressCtx.processed, total: progressCtx.total, path: fullPath });
+          const stage = hasDateRangeFilter(scanOptions)
+            ? `Scanning videos (${progressCtx.processed} matched)`
+            : 'Scanning videos';
+          onProgress({
+            stage,
+            current: progressCtx.processed,
+            total: progressCtx.total,
+            path: fullPath,
+          });
         }
       }
     }
@@ -201,22 +249,64 @@ export function sortVideosByTimestamp(videos: Video[]): Video[] {
 /**
  * Main function to scan a folder and return sorted video files
  */
+export function buildImmichVideoScanOptions(settings?: {
+  supportedExtensions?: string[];
+  excludePatterns?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}): VideoScanOptions {
+  return {
+    supportedExtensions: settings?.supportedExtensions,
+    excludePatterns: [
+      ...DEFAULT_IMMICH_EXCLUDE_PATTERNS,
+      ...(settings?.excludePatterns ?? []),
+    ],
+    dateFrom: settings?.dateFrom,
+    dateTo: settings?.dateTo,
+  };
+}
+
 export async function scanFolderForVideos(
   folderPath: string,
   includeSubfolders: boolean = true,
-  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void
+  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void,
+  scanOptions?: VideoScanOptions
 ): Promise<Video[]> {
   console.log(`Scanning folder for videos: ${folderPath} (includeSubfolders: ${includeSubfolders})`);
   
   try {
-    const total = await countVideoFiles(folderPath, includeSubfolders);
+    const useDateFilter = hasDateRangeFilter(scanOptions);
+    const total = useDateFilter
+      ? 0
+      : await countVideoFiles(folderPath, includeSubfolders, scanOptions);
     const progressCtx = { processed: 0, total };
-    if (onProgress) onProgress({ stage: 'Preparing scan', current: 0, total });
-    const videos = await scanDirectoryForVideos(folderPath, includeSubfolders, onProgress, progressCtx);
+    if (onProgress) {
+      onProgress({
+        stage: useDateFilter ? 'Scanning videos (matching date range)' : 'Preparing scan',
+        current: 0,
+        total,
+      });
+    }
+    const videos = await scanDirectoryForVideos(
+      folderPath,
+      includeSubfolders,
+      onProgress,
+      progressCtx,
+      scanOptions
+    );
     const sortedVideos = sortVideosByTimestamp(videos);
     
     console.log(`Found ${sortedVideos.length} video files`);
-    if (onProgress) onProgress({ stage: 'Sorting videos', current: progressCtx.total, total: progressCtx.total });
+    if (onProgress) {
+      const stage = useDateFilter
+        ? `Found ${sortedVideos.length} videos in date range`
+        : 'Sorting videos';
+      onProgress({
+        stage,
+        current: useDateFilter ? sortedVideos.length : progressCtx.total,
+        total: useDateFilter ? sortedVideos.length : progressCtx.total,
+      });
+    }
     return sortedVideos;
   } catch (error) {
     console.error('Error scanning folder for videos:', error);

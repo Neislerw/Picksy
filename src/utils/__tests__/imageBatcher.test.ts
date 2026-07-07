@@ -34,6 +34,8 @@ describe('imageBatcher', () => {
       expect(isImageFile('photo.bmp')).toBe(true);
       expect(isImageFile('photo.tiff')).toBe(true);
       expect(isImageFile('photo.webp')).toBe(true);
+      expect(isImageFile('photo.heic')).toBe(true);
+      expect(isImageFile('photo.heif')).toBe(true);
     });
 
     it('should return false for non-image extensions', () => {

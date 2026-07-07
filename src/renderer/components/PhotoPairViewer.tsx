@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Photo, PhotoBatch } from '../../types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { MediaSourceType, Photo, PhotoBatch } from '../../types';
 import '../styles/PhotoPairViewer.css';
 import Keycap from './Keycap';
 
@@ -7,6 +7,7 @@ interface PhotoPairViewerProps {
   batch: PhotoBatch;
   currentBatchIndex: number;
   totalBatches: number;
+  sourceType?: MediaSourceType;
   onSelection: (selectedPhotos: Photo[], photosToDelete: Photo[]) => void;
   onBatchComplete: () => void;
   onUndoLastAction?: () => void;
@@ -31,10 +32,19 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
   const [keptPhotoIds, setKeptPhotoIds] = useState<Set<string>>(new Set());
   const [hasSeenAllOnce, setHasSeenAllOnce] = useState<boolean>(false);
   const [rePassedPhotoIds, setRePassedPhotoIds] = useState<Set<string>>(new Set());
+  const batchCompleteCalledRef = useRef(false);
+
+  const finishBatch = useCallback(() => {
+    if (batchCompleteCalledRef.current) return;
+    batchCompleteCalledRef.current = true;
+    setBatchCompleted(true);
+    onBatchComplete();
+  }, [onBatchComplete]);
   
   // Initialize remaining photos when batch changes
   useEffect(() => {
     console.log('Batch changed, initializing state', { batchId: batch.id, photoCount: batch.photos.length });
+    batchCompleteCalledRef.current = false;
     setRemainingPhotos(batch.photos);
     setCurrentPairIndex(0);
     setSelectedPhotos([]);
@@ -49,16 +59,14 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
   // Check if batch is complete
   useEffect(() => {
     if (remainingPhotos.length === 1 && !batchCompleted) {
-      // Auto-select the last photo
-      setSelectedPhotos(prev => [...prev, remainingPhotos[0]]);
-      onSelection([...selectedPhotos, remainingPhotos[0]], photosToDelete);
-      setBatchCompleted(true);
-      onBatchComplete();
+      const lastPhoto = remainingPhotos[0];
+      setSelectedPhotos(prev => [...prev, lastPhoto]);
+      onSelection([lastPhoto], []);
+      finishBatch();
     } else if (remainingPhotos.length === 0 && !batchCompleted) {
-      setBatchCompleted(true);
-      onBatchComplete();
+      finishBatch();
     }
-  }, [remainingPhotos.length, selectedPhotos, photosToDelete, batchCompleted, onSelection, onBatchComplete]);
+  }, [remainingPhotos.length, batchCompleted, onSelection, finishBatch, remainingPhotos]);
 
   // Get current photo pair
   const getCurrentPair = (): [Photo, Photo] | null => {
@@ -147,18 +155,18 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
       return [...withoutCurrentPair, ...photosToKeep];
     });
 
-    // Add photos to delete list
+    // Add photos to delete list and trash immediately (don't wait for batch end)
+    if (photosToRemove.length > 0) {
+      onSelection([], photosToRemove);
+    }
     setPhotosToDelete(prev => [...prev, ...photosToRemove]);
 
     // If we're dealing with a 2-photo batch and selecting both or neither, complete the batch
     if (remainingPhotos.length === 2 && (action === 'both' || action === 'neither')) {
-      setBatchCompleted(true);
       if (action === 'both') {
-        onSelection([...selectedPhotos, leftPhoto, rightPhoto], photosToDelete);
-      } else {
-        onSelection(selectedPhotos, [...photosToDelete, leftPhoto, rightPhoto]);
+        onSelection([leftPhoto, rightPhoto], []);
       }
-      onBatchComplete();
+      finishBatch();
       return;
     }
 
@@ -177,16 +185,13 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
 
     // If we have 2 or fewer photos remaining after this selection,
     // they'll be handled in getCurrentPair on the next render
-  }, [remainingPhotos, currentPairIndex]);
+  }, [remainingPhotos, currentPairIndex, onSelection, finishBatch]);
 
   // Handle keeping all remaining photos in the batch
   const handleKeepAllRemaining = useCallback(() => {
-    // Add all remaining photos to selected list and complete the batch
     setSelectedPhotos(prev => {
       const newSelectedPhotos = [...prev, ...remainingPhotos];
-      // Complete the batch with updated state
-      onSelection(newSelectedPhotos, photosToDelete);
-      onBatchComplete();
+      onSelection(newSelectedPhotos, []);
       return newSelectedPhotos;
     });
     // Mark all remaining as kept
@@ -204,23 +209,16 @@ const PhotoPairViewer: React.FC<PhotoPairViewerProps> = ({
     }
     // Clear the remaining photos pool
     setRemainingPhotos([]);
-  }, [remainingPhotos, photosToDelete, onSelection, onBatchComplete]);
+  }, [remainingPhotos, onSelection, hasSeenAllOnce]);
 
   // Handle moving all remaining photos in the batch to delete folder
   const handleMoveAllRemaining = useCallback(() => {
-    console.log('handleMoveAllRemaining called with remainingPhotos:', remainingPhotos.length);
-    // Add all remaining photos to delete list and complete the batch
-    setPhotosToDelete(prev => {
-      const newPhotosToDelete = [...prev, ...remainingPhotos];
-      console.log('Moving all remaining photos to delete:', remainingPhotos.length, 'photos');
-      // Complete the batch with updated state
-      onSelection(selectedPhotos, newPhotosToDelete);
-      onBatchComplete();
-      return newPhotosToDelete;
-    });
-    // Clear the remaining photos pool
+    if (remainingPhotos.length > 0) {
+      onSelection([], remainingPhotos);
+    }
+    setPhotosToDelete(prev => [...prev, ...remainingPhotos]);
     setRemainingPhotos([]);
-  }, [remainingPhotos, selectedPhotos, onSelection, onBatchComplete]);
+  }, [remainingPhotos, onSelection]);
 
   // Handle undo (go back to previous pair)
   const handleUndo = useCallback(() => {

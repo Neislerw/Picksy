@@ -1,9 +1,26 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Photo, PhotoBatch } from '../types';
+import { DEFAULT_IMMICH_EXCLUDE_PATTERNS, isExcludedByPatterns } from './globMatch';
+import { hasDateRangeFilter, isTimestampInDateRange } from './dateFilter';
+import { shouldSkipScanDirectory } from './immichScan';
 
 // Supported image file extensions
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'];
+const DEFAULT_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.heic', '.heif'];
+
+export interface ImageScanOptions {
+  includeSubfolders?: boolean;
+  sortingMode?: SortingMode;
+  supportedExtensions?: string[];
+  excludePatterns?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+function resolveImageExtensions(extensions?: string[]): string[] {
+  if (!extensions?.length) return DEFAULT_IMAGE_EXTENSIONS;
+  return extensions.map((ext) => (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase());
+}
 
 // Default batch detection settings
 const DEFAULT_BATCH_TIME_WINDOW = 30 * 1000; // 30 seconds
@@ -16,9 +33,10 @@ export type SortingMode = 'dateTaken' | 'dateCreated' | 'filename';
 /**
  * Check if a file is an image based on its extension
  */
-export function isImageFile(filename: string): boolean {
+export function isImageFile(filename: string, extensions?: string[]): boolean {
   const ext = path.extname(filename).toLowerCase();
-  return IMAGE_EXTENSIONS.includes(ext);
+  const allowed = resolveImageExtensions(extensions);
+  return allowed.includes(ext);
 }
 
 /**
@@ -34,10 +52,12 @@ export async function extractExifData(filePath: string): Promise<any> {
         const exifr = require('exifr');
         const data = await exifr.parse(filePath, { tiff: true, ifd0: true, exif: true });
         if (data) {
-          console.log(`exifr parsed for ${path.basename(filePath)}:`, {
-            hasDateTimeOriginal: !!(data as any)?.DateTimeOriginal,
-            hasCreateDate: !!(data as any)?.CreateDate,
-          });
+          if (process.env.DEBUG_SCAN === '1') {
+            console.log(`exifr parsed for ${path.basename(filePath)}:`, {
+              hasDateTimeOriginal: !!(data as any)?.DateTimeOriginal,
+              hasCreateDate: !!(data as any)?.CreateDate,
+            });
+          }
           return data;
         }
       } catch (err) {
@@ -65,11 +85,13 @@ export async function extractExifData(filePath: string): Promise<any> {
 
           try {
             const exif = exifReader(exifData);
-            console.log(`EXIF data extracted for ${path.basename(filePath)} (manual):`, {
-              hasExif: !!exif,
-              hasExifData: !!(exif && exif.exif),
-              dateTimeOriginal: exif?.exif?.DateTimeOriginal,
-            });
+            if (process.env.DEBUG_SCAN === '1') {
+              console.log(`EXIF data extracted for ${path.basename(filePath)} (manual):`, {
+                hasExif: !!exif,
+                hasExifData: !!(exif && exif.exif),
+                dateTimeOriginal: exif?.exif?.DateTimeOriginal,
+              });
+            }
             return exif;
           } catch (error) {
             console.warn(`Failed to parse EXIF data (manual) for ${filePath}:`, error);
@@ -77,8 +99,10 @@ export async function extractExifData(filePath: string): Promise<any> {
         }
         offset++;
       }
-      console.log(`No EXIF marker found in ${path.basename(filePath)}`);
-    } else {
+      if (process.env.DEBUG_SCAN === '1') {
+        console.log(`No EXIF marker found in ${path.basename(filePath)}`);
+      }
+    } else if (process.env.DEBUG_SCAN === '1') {
       console.log(`Skipping EXIF extraction for ${path.basename(filePath)} (format: ${ext})`);
     }
 
@@ -118,10 +142,7 @@ function parseExifDate(dateString: string): Date | null {
   }
 }
 
-/**
- * Extract timestamp from filename (format: YYYYMMDD_HHMMSS.jpg)
- */
-function parseTimestampFromFilename(filename: string): Date | null {
+export function parseTimestampFromFilename(filename: string): Date | null {
   try {
     // Remove file extension
     const nameWithoutExt = path.parse(filename).name;
@@ -155,12 +176,14 @@ function parseTimestampFromFilename(filename: string): Date | null {
  */
 export async function getPhotoTimestamp(filePath: string, stats: fs.Stats): Promise<Date> {
   try {
-    const exifData = await extractExifData(filePath);
     const filename = path.basename(filePath);
-    
-    console.log(`\n=== Timestamp extraction for ${filename} ===`);
-    console.log(`File created time: ${stats.birthtime.toISOString()}`);
-    
+    const filenameTimestamp = parseTimestampFromFilename(filename);
+    if (filenameTimestamp) {
+      return filenameTimestamp;
+    }
+
+    const exifData = await extractExifData(filePath);
+
   // 1. Try EXIF DateTimeOriginal (Date Taken) - highest priority
   const exifDateCandidate: any = (exifData && (exifData.exif?.DateTimeOriginal ?? (exifData as any).DateTimeOriginal));
   if (exifDateCandidate) {
@@ -171,26 +194,11 @@ export async function getPhotoTimestamp(filePath: string, stats: fs.Stats): Prom
       dateTaken = parseExifDate(exifDateCandidate);
     }
     if (dateTaken) {
-      console.log(`${filename}: ✅ Using EXIF DateTimeOriginal (Date Taken): ${dateTaken.toISOString()}`);
       return dateTaken;
-    } else {
-      console.log(`${filename}: ❌ Failed to parse EXIF DateTimeOriginal: ${exifDateCandidate}`);
     }
-  } else {
-    console.log(`${filename}: No EXIF DateTimeOriginal found`);
   }
     
-    // 2. Try timestamp from filename (format: YYYYMMDD_HHMMSS.jpg)
-    const filenameTimestamp = parseTimestampFromFilename(filename);
-    if (filenameTimestamp) {
-      console.log(`${filename}: ✅ Using timestamp from filename: ${filenameTimestamp.toISOString()}`);
-      return filenameTimestamp;
-    } else {
-      console.log(`${filename}: No timestamp pattern found in filename`);
-    }
-    
     // 3. Fallback to file created time (NOT modified time)
-    console.log(`${filename}: ❌ No EXIF or filename timestamp found, using file created time: ${stats.birthtime.toISOString()}`);
     return stats.birthtime;
   } catch (error) {
     console.warn(`Failed to get timestamp for ${filePath}:`, error);
@@ -216,20 +224,28 @@ export async function getFileStats(filePath: string): Promise<fs.Stats> {
 /**
  * Recursively scan a directory for image files
  */
-export async function countImageFiles(dirPath: string, includeSubfolders: boolean = true): Promise<number> {
+export async function countImageFiles(
+  dirPath: string,
+  includeSubfolders: boolean = true,
+  scanOptions?: ImageScanOptions
+): Promise<number> {
   let count = 0;
+  const extensions = resolveImageExtensions(scanOptions?.supportedExtensions);
+  const excludePatterns = scanOptions?.excludePatterns ?? [];
   try {
     const items = await fs.promises.readdir(dirPath);
     for (const item of items) {
       const fullPath = path.join(dirPath, item);
       const stats = await fs.promises.stat(fullPath);
       if (stats.isDirectory()) {
-        if (item === '_delete' || item === '_favorites') continue;
+        if (shouldSkipScanDirectory(dirPath, item, scanOptions)) continue;
         if (includeSubfolders) {
-          count += await countImageFiles(fullPath, includeSubfolders);
+          count += await countImageFiles(fullPath, includeSubfolders, scanOptions);
         }
-      } else if (stats.isFile() && isImageFile(item)) {
-        count += 1;
+      } else if (stats.isFile() && isImageFile(item, extensions)) {
+        if (!isExcludedByPatterns(fullPath, excludePatterns)) {
+          count += 1;
+        }
       }
     }
   } catch (error) {
@@ -244,9 +260,12 @@ export async function scanDirectoryForImages(
   includeSubfolders: boolean = true,
   sortingMode: SortingMode = 'dateTaken',
   onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void,
-  progressCtx?: { processed: number; total: number }
+  progressCtx?: { processed: number; total: number },
+  scanOptions?: ImageScanOptions
 ): Promise<Photo[]> {
   const photos: Photo[] = [];
+  const extensions = resolveImageExtensions(scanOptions?.supportedExtensions);
+  const excludePatterns = scanOptions?.excludePatterns ?? [];
   
   try {
     const items = await fs.promises.readdir(dirPath);
@@ -256,24 +275,42 @@ export async function scanDirectoryForImages(
       const stats = await fs.promises.stat(fullPath);
       
       if (stats.isDirectory()) {
-        // Always skip _delete and _favorites folders
-        if (item === '_delete' || item === '_favorites') {
+        if (shouldSkipScanDirectory(dirPath, item, scanOptions)) {
           continue;
         }
         // Only scan subdirectories if includeSubfolders is true
         if (includeSubfolders) {
-          const subPhotos = await scanDirectoryForImages(fullPath, includeSubfolders, sortingMode, onProgress, progressCtx);
+          const subPhotos = await scanDirectoryForImages(
+            fullPath,
+            includeSubfolders,
+            sortingMode,
+            onProgress,
+            progressCtx,
+            scanOptions
+          );
           photos.push(...subPhotos);
         }
-      } else if (stats.isFile() && isImageFile(item)) {
+      } else if (stats.isFile() && isImageFile(item, extensions)) {
+        if (isExcludedByPatterns(fullPath, excludePatterns)) {
+          continue;
+        }
         // Choose timestamp source based on sorting mode
         let timestamp: Date;
         if (sortingMode === 'dateCreated') {
           timestamp = stats.birthtime;
+        } else if (hasDateRangeFilter(scanOptions)) {
+          const filenameTimestamp = parseTimestampFromFilename(item);
+          if (filenameTimestamp) {
+            timestamp = filenameTimestamp;
+          } else {
+            timestamp = await getPhotoTimestamp(fullPath, stats);
+          }
         } else {
-          // For dateTaken and filename modes, we still attempt best timestamp.
-          // In filename mode, timestamp will not be used for sorting, but is retained for metadata.
           timestamp = await getPhotoTimestamp(fullPath, stats);
+        }
+
+        if (!isTimestampInDateRange(timestamp, scanOptions)) {
+          continue;
         }
         
         // Create Photo object with metadata
@@ -286,8 +323,15 @@ export async function scanDirectoryForImages(
         photos.push(photo);
         if (progressCtx && onProgress) {
           progressCtx.processed += 1;
-          // Throttle by relying on renderer side if needed; emit each step for simplicity
-          onProgress({ stage: 'Scanning photos', current: progressCtx.processed, total: progressCtx.total, path: fullPath });
+          const stage = hasDateRangeFilter(scanOptions)
+            ? `Scanning photos (${progressCtx.processed} matched)`
+            : 'Scanning photos';
+          onProgress({
+            stage,
+            current: progressCtx.processed,
+            total: progressCtx.total,
+            path: fullPath,
+          });
         }
       }
     }
@@ -426,15 +470,32 @@ export async function scanFolderForImages(
   folderPath: string,
   includeSubfolders: boolean = true,
   sortingMode: SortingMode = 'dateTaken',
-  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void
+  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void,
+  scanOptions?: ImageScanOptions
 ): Promise<Photo[]> {
   console.log(`Scanning folder: ${folderPath} (includeSubfolders: ${includeSubfolders}, sortingMode: ${sortingMode})`);
   
   try {
-    const total = await countImageFiles(folderPath, includeSubfolders);
+    const useDateFilter = hasDateRangeFilter(scanOptions);
+    const total = useDateFilter
+      ? 0
+      : await countImageFiles(folderPath, includeSubfolders, scanOptions);
     const progressCtx = { processed: 0, total };
-    if (onProgress) onProgress({ stage: 'Preparing scan', current: 0, total });
-    const photos = await scanDirectoryForImages(folderPath, includeSubfolders, sortingMode, onProgress, progressCtx);
+    if (onProgress) {
+      onProgress({
+        stage: useDateFilter ? 'Scanning photos (matching date range)' : 'Preparing scan',
+        current: 0,
+        total,
+      });
+    }
+    const photos = await scanDirectoryForImages(
+      folderPath,
+      includeSubfolders,
+      sortingMode,
+      onProgress,
+      progressCtx,
+      scanOptions
+    );
     let sortedPhotos: Photo[];
     if (sortingMode === 'filename') {
       sortedPhotos = [...photos].sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }));
@@ -443,7 +504,16 @@ export async function scanFolderForImages(
     }
     
     console.log(`Found ${sortedPhotos.length} image files`);
-    if (onProgress) onProgress({ stage: 'Sorting photos', current: progressCtx.total, total: progressCtx.total });
+    if (onProgress) {
+      const stage = useDateFilter
+        ? `Found ${sortedPhotos.length} photos in date range`
+        : 'Sorting photos';
+      onProgress({
+        stage,
+        current: useDateFilter ? sortedPhotos.length : progressCtx.total,
+        total: useDateFilter ? sortedPhotos.length : progressCtx.total,
+      });
+    }
     return sortedPhotos;
   } catch (error) {
     console.error('Error scanning folder for images:', error);
@@ -454,6 +524,23 @@ export async function scanFolderForImages(
 /**
  * Main function to scan a folder and return photo batches
  */
+export function buildImmichImageScanOptions(settings?: {
+  supportedExtensions?: string[];
+  excludePatterns?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+}): ImageScanOptions {
+  return {
+    supportedExtensions: settings?.supportedExtensions,
+    excludePatterns: [
+      ...DEFAULT_IMMICH_EXCLUDE_PATTERNS,
+      ...(settings?.excludePatterns ?? []),
+    ],
+    dateFrom: settings?.dateFrom,
+    dateTo: settings?.dateTo,
+  };
+}
+
 export async function scanFolderAndCreateBatches(
   folderPath: string,
   timeWindow: number = DEFAULT_BATCH_TIME_WINDOW,
@@ -462,15 +549,25 @@ export async function scanFolderAndCreateBatches(
   includeSubfolders: boolean = true,
   processedPhotos: string[] = [],
   sortingMode: SortingMode = 'dateTaken',
-  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void
+  onProgress?: (update: { stage: string; current: number; total: number; path?: string }) => void,
+  scanOptions?: ImageScanOptions
 ): Promise<PhotoBatch[]> {
   console.log(`Scanning folder and creating batches: ${folderPath} (includeSubfolders: ${includeSubfolders}, sortingMode: ${sortingMode})`);
   
   try {
-    const allPhotos = await scanFolderForImages(folderPath, includeSubfolders, sortingMode, onProgress);
+    const allPhotos = await scanFolderForImages(
+      folderPath,
+      includeSubfolders,
+      sortingMode,
+      onProgress,
+      scanOptions
+    );
     
-    // Filter out already processed photos
-    const unprocessedPhotos = allPhotos.filter(photo => !processedPhotos.includes(photo.path));
+    // Filter out already processed photos (by path or asset id key)
+    const processedSet = new Set(processedPhotos);
+    const unprocessedPhotos = allPhotos.filter(
+      (photo) => !processedSet.has(photo.path) && !processedSet.has(photo.id)
+    );
     
     console.log(`Found ${allPhotos.length} total photos, ${unprocessedPhotos.length} unprocessed`);
     if (onProgress) onProgress({ stage: 'Batching photos', current: unprocessedPhotos.length, total: unprocessedPhotos.length });

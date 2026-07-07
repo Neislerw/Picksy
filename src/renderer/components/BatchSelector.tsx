@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/BatchSelector.css';
 import logoImage from '../../../resources/logo.png';
+import { ImmichConnectionConfig, MediaSourceType } from '../../types';
 
 interface Settings {
+  sourceType: MediaSourceType;
   batchTimeWindow: number; // in seconds
   minBatchSize: number;
   maxBatchSize: number;
   includeSubfolders: boolean;
   supportedExtensions: string[];
+  excludePatterns: string[];
   autoSaveInterval: number; // in minutes
   sortingMode?: 'dateTaken' | 'dateCreated' | 'filename';
+  dateFrom?: string;
+  dateTo?: string;
   video?: {
     scrubForwardSeconds: number;
     scrubBackwardSeconds: number;
@@ -22,25 +27,44 @@ interface Settings {
 type CullingMode = 'tournament' | 'thumbnail' | 'video';
 
 interface BatchSelectorProps {
-  onFolderSelect: (folderPath: string, includeSubfolders: boolean, settings: Settings, mode: CullingMode) => void;
+  onFolderSelect: (
+    folderPath: string,
+    includeSubfolders: boolean,
+    settings: Settings,
+    mode: CullingMode,
+    immichConfig?: ImmichConnectionConfig | null
+  ) => void;
   isLoading?: boolean;
 }
+
+const LOCAL_DEFAULT_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'];
+const IMMICH_DEFAULT_EXTENSIONS = [...LOCAL_DEFAULT_EXTENSIONS, '.heic', '.heif'];
 
 const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading = false }) => {
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [mode, setMode] = useState<CullingMode>('tournament');
   const [progress, setProgress] = useState<{ stage: string; current: number; total: number } | null>(null);
+  const [immichServerUrl, setImmichServerUrl] = useState('');
+  const [immichApiKey, setImmichApiKey] = useState('');
+  const [localPathPrefix, setLocalPathPrefix] = useState('');
+  const [immichPathPrefix, setImmichPathPrefix] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState<string>('');
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
   
   // Default settings
   const [settings, setSettings] = useState<Settings>({
+    sourceType: 'local',
     batchTimeWindow: 30, // 30 seconds
     minBatchSize: 2,
     maxBatchSize: 20,
     includeSubfolders: false,
-    supportedExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'],
+    supportedExtensions: LOCAL_DEFAULT_EXTENSIONS,
+    excludePatterns: [],
     autoSaveInterval: 0, // Auto-save after each selection (not interval-based)
     sortingMode: 'dateTaken',
+    dateFrom: '',
+    dateTo: '',
     video: {
       scrubForwardSeconds: 5,
       scrubBackwardSeconds: 3,
@@ -49,6 +73,20 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
       dateSource: 'filename'
     }
   });
+
+  const applySourceType = (sourceType: MediaSourceType) => {
+    setSettings((prev) => ({
+      ...prev,
+      sourceType,
+      includeSubfolders: sourceType === 'immich-external' ? true : prev.includeSubfolders,
+      supportedExtensions:
+        sourceType === 'immich-external' ? IMMICH_DEFAULT_EXTENSIONS : LOCAL_DEFAULT_EXTENSIONS,
+      excludePatterns: sourceType === 'immich-external' ? ['**/Raw/**', '**/*.xmp'] : [],
+    }));
+    if (sourceType === 'local') {
+      setConnectionStatus('');
+    }
+  };
 
   useEffect(() => {
     const handler = (update: { stage: string; current: number; total: number }) => {
@@ -80,15 +118,75 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
     setSelectedPath(e.target.value);
   };
 
-  const handleProcessFolder = () => {
-    if (selectedPath) {
-      // Expose settings for App to pass down to VideoMode as initial props
-      (window as any).lastSettings = settings;
-      onFolderSelect(selectedPath, settings.includeSubfolders, settings, mode);
+  const buildImmichConfig = (): ImmichConnectionConfig | null => {
+    if (settings.sourceType !== 'immich-external') return null;
+    const config: ImmichConnectionConfig = {
+      serverUrl: immichServerUrl.trim(),
+      apiKey: immichApiKey.trim(),
+    };
+    if (localPathPrefix.trim() && immichPathPrefix.trim()) {
+      config.pathMapping = {
+        localPrefix: localPathPrefix.trim(),
+        immichPrefix: immichPathPrefix.trim(),
+      };
+    }
+    return config;
+  };
+
+  const handleTestConnection = async () => {
+    const config = buildImmichConfig();
+    if (!config?.serverUrl || !config?.apiKey) {
+      setConnectionStatus('Enter server URL and API key');
+      return;
+    }
+    setIsTestingConnection(true);
+    setConnectionStatus('Testing connection...');
+    try {
+      const result = await window.electron?.ipcRenderer.invoke('immich-test-connection', config);
+      if (result?.ok) {
+        if (result.effectiveServerUrl) {
+          setImmichServerUrl(result.effectiveServerUrl);
+        }
+        const versionMsg = result.serverVersion ? ` (v${result.serverVersion})` : '';
+        const protocolMsg = result.protocolDowngraded ? ' — switched to HTTP' : '';
+        setConnectionStatus(`Connected${versionMsg}${protocolMsg}`);
+      } else {
+        setConnectionStatus(result?.error || 'Connection failed');
+      }
+    } catch (e) {
+      setConnectionStatus('Connection failed');
+    } finally {
+      setIsTestingConnection(false);
     }
   };
 
-  const pct = progress && progress.total > 0 ? Math.min(100, Math.round((progress.current / progress.total) * 100)) : 0;
+  const handleProcessFolder = () => {
+    if (selectedPath) {
+      const immichConfig = buildImmichConfig();
+      if (settings.sourceType === 'immich-external') {
+        if (!immichConfig?.serverUrl || !immichConfig?.apiKey) {
+          setConnectionStatus('Immich server URL and API key are required');
+          return;
+        }
+      }
+      if (settings.dateFrom && settings.dateTo && settings.dateFrom > settings.dateTo) {
+        setConnectionStatus('Start date must be on or before end date');
+        return;
+      }
+      (window as any).lastSettings = settings;
+      onFolderSelect(selectedPath, settings.includeSubfolders, settings, mode, immichConfig);
+    }
+  };
+
+  const hasDateRange = !!(settings.dateFrom || settings.dateTo);
+  const pct = progress && progress.total > 0
+    ? Math.min(100, Math.round((progress.current / progress.total) * 100))
+    : 0;
+  const progressLabel = progress
+    ? progress.total > 0
+      ? `${progress.stage} ${pct}% (${progress.current}/${progress.total})`
+      : progress.stage
+    : 'Preparing...';
 
   return (
     <div className="batch-selector">
@@ -130,12 +228,35 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
               <div style={{ width: `${pct}%`, height: '100%', background: '#27ae60', transition: 'width 0.2s ease' }} />
             </div>
             <div style={{ color: '#cccccc', marginTop: 6, fontSize: 12 }}>
-              {progress ? `${progress.stage} ${pct}% (${progress.current}/${progress.total})` : 'Preparing...'}
+              {progressLabel}
             </div>
           </div>
         )}
         
         <div className="options">
+          <div className="mode-selector">
+            <span className="mode-selector__label">Source:</span>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="source-type"
+                value="local"
+                checked={settings.sourceType === 'local'}
+                onChange={() => applySourceType('local')}
+              />
+              <span>Local Folder</span>
+            </label>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="source-type"
+                value="immich-external"
+                checked={settings.sourceType === 'immich-external'}
+                onChange={() => applySourceType('immich-external')}
+              />
+              <span>Immich External Library</span>
+            </label>
+          </div>
           <div className="mode-selector">
             <span className="mode-selector__label">Mode:</span>
             <label className="radio-option">
@@ -178,6 +299,44 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
             <span>Include subfolders</span>
           </label>
 
+          <div className="date-range-filter" style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
+            <span className="mode-selector__label">Date range (optional):</span>
+            <label className="setting-label" style={{ margin: 0 }}>
+              From
+              <input
+                type="date"
+                value={settings.dateFrom || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, dateFrom: e.target.value }))}
+                className="setting-input"
+                style={{ marginLeft: 6 }}
+              />
+            </label>
+            <label className="setting-label" style={{ margin: 0 }}>
+              To
+              <input
+                type="date"
+                value={settings.dateTo || ''}
+                onChange={(e) => setSettings(prev => ({ ...prev, dateTo: e.target.value }))}
+                className="setting-input"
+                style={{ marginLeft: 6 }}
+              />
+            </label>
+            {hasDateRange && (
+              <button
+                type="button"
+                className="settings-toggle"
+                onClick={() => setSettings(prev => ({ ...prev, dateFrom: '', dateTo: '' }))}
+              >
+                Clear dates
+              </button>
+            )}
+          </div>
+          {hasDateRange && (
+            <span className="setting-help" style={{ display: 'block', marginTop: 4 }}>
+              Only files whose date falls in this range will be scanned{progress && progress.total === 0 ? ' — progress shows matched count while scanning' : ''}.
+            </span>
+          )}
+
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="settings-toggle"
@@ -185,6 +344,79 @@ const BatchSelector: React.FC<BatchSelectorProps> = ({ onFolderSelect, isLoading
             {showSettings ? 'Hide Settings' : 'Show Settings'}
           </button>
         </div>
+
+        {settings.sourceType === 'immich-external' && (
+          <div className="settings-panel" style={{ marginBottom: '1rem' }}>
+            <h3>Immich Connection</h3>
+            <div className="settings-grid">
+              <div className="setting-group">
+                <label className="setting-label">
+                  Server URL:
+                  <input
+                    type="text"
+                    value={immichServerUrl}
+                    onChange={(e) => setImmichServerUrl(e.target.value)}
+                    className="setting-input"
+                    placeholder="http://192.168.7.254:2283"
+                  />
+                </label>
+              </div>
+              <div className="setting-group">
+                <label className="setting-label">
+                  API Key:
+                  <input
+                    type="password"
+                    value={immichApiKey}
+                    onChange={(e) => setImmichApiKey(e.target.value)}
+                    className="setting-input"
+                    placeholder="Immich API key"
+                  />
+                </label>
+                <span className="setting-help">Immich on port 2283 is usually HTTP. If you enter https:// by mistake, Test Connection will switch to http:// automatically. API key is stored in memory for this session only.</span>
+              </div>
+              <div className="setting-group">
+                <label className="setting-label">
+                  Local Path Prefix:
+                  <input
+                    type="text"
+                    value={localPathPrefix}
+                    onChange={(e) => setLocalPathPrefix(e.target.value)}
+                    className="setting-input"
+                    placeholder="E:\Photos"
+                  />
+                </label>
+              </div>
+              <div className="setting-group">
+                <label className="setting-label">
+                  Immich Path Prefix:
+                  <input
+                    type="text"
+                    value={immichPathPrefix}
+                    onChange={(e) => setImmichPathPrefix(e.target.value)}
+                    className="setting-input"
+                    placeholder="/mnt/photos"
+                  />
+                </label>
+                <span className="setting-help">Optional mapping between your HDD path and Immich container path</span>
+              </div>
+              <div className="setting-group">
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={isTestingConnection || isLoading}
+                  className="folder-input__button"
+                >
+                  {isTestingConnection ? 'Testing...' : 'Test Connection'}
+                </button>
+                {connectionStatus && (
+                  <span className="setting-help" style={{ display: 'block', marginTop: 6 }}>
+                    {connectionStatus}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         
         {showSettings && (
           <div className="settings-panel">

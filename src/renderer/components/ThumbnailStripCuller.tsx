@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Photo } from '../../types';
+import { MediaSourceType, Photo } from '../../types';
 import '../styles/ThumbnailStripCuller.css';
 import Keycap from './Keycap';
 
 interface ThumbnailStripCullerProps {
   folderPath: string;
   photos: Photo[];
+  sourceType?: MediaSourceType;
   onExit: () => void;
   onComplete?: () => void;
 }
@@ -18,7 +19,7 @@ interface MovedRecord {
   toPath: string;
 }
 
-const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath, photos, onExit, onComplete }) => {
+const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath, photos, sourceType = 'local', onExit, onComplete }) => {
   const [index, setIndex] = useState<number>(0);
   const [movedStack, setMovedStack] = useState<MovedRecord[]>([]);
   const [movedPaths, setMovedPaths] = useState<Set<string>>(new Set());
@@ -59,7 +60,7 @@ const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath,
     try {
       const res: Array<{ fromPath: string; toPath: string }> | undefined = await window.electron?.ipcRenderer.invoke(
         'process-photos',
-        { selectedPhotos: [], photosToDelete: [photo] }
+        { selectedPhotos: [], photosToDelete: [photo], sourceType }
       );
       if (res && res[0]) {
         setMovedStack(prev => [...prev, { photo, fromPath: res[0].fromPath, toPath: res[0].toPath }]);
@@ -72,14 +73,19 @@ const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath,
     } catch (e) {
       console.error('Failed to move to _delete:', e);
     }
-  }, []);
+  }, [sourceType]);
 
   const handleRestoreSpecific = useCallback(async (photo: Photo) => {
     const idx = [...movedStack].reverse().findIndex(r => r.fromPath === photo.path);
     if (idx === -1) return;
     const record = movedStack[movedStack.length - 1 - idx];
     try {
-      await window.electron?.ipcRenderer.invoke('restore-photo', record);
+      await window.electron?.ipcRenderer.invoke('restore-photo', {
+        ...record,
+        photo: record.photo,
+        assetId: record.photo.assetId,
+        sourceType,
+      });
       setMovedStack(prev => prev.filter(r => !(r.fromPath === record.fromPath && r.toPath === record.toPath)));
       setMovedPaths(prev => {
         const next = new Set(prev);
@@ -89,13 +95,18 @@ const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath,
     } catch (e) {
       console.error('Failed to restore specific photo:', e);
     }
-  }, [movedStack]);
+  }, [movedStack, sourceType]);
 
   const handleUndo = useCallback(async () => {
     const last = movedStack[movedStack.length - 1];
     if (!last) return;
     try {
-      await window.electron?.ipcRenderer.invoke('restore-photo', last);
+      await window.electron?.ipcRenderer.invoke('restore-photo', {
+        ...last,
+        photo: last.photo,
+        assetId: last.photo.assetId,
+        sourceType,
+      });
       setMovedStack(prev => prev.slice(0, -1));
       setMovedPaths(prev => {
         const next = new Set(prev);
@@ -105,7 +116,7 @@ const ThumbnailStripCuller: React.FC<ThumbnailStripCullerProps> = ({ folderPath,
     } catch (e) {
       console.error('Failed to undo move:', e);
     }
-  }, [movedStack]);
+  }, [movedStack, sourceType]);
 
   const onKeyDown = useCallback((e: KeyboardEvent) => {
     if (!photos.length) return;
